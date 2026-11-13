@@ -1,0 +1,87 @@
+{
+  "name": "secshield-scanner",
+  "displayName": "SecShield - Dependency Vulnerability & CISA KEV Scanner",
+  "description": "Shift-Left Software Supply Chain Security Scanner with OSV & CISA KEV threat intelligence",
+  "version": "1.0.0",
+  "publisher": "secshield",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Linters",
+    "Security",
+    "Testing"
+  ],
+  "keywords": [
+    "security",
+    "cve",
+    "vulnerability",
+    "cisa",
+    "sast",
+    "sca",
+    "devsecops"
+  ],
+  "activationEvents": [
+    "onCommand:secshield.scanCurrentProject",
+    "onCommand:secshield.setApiKey",
+    "workspaceContains:**/package.json",
+    "workspaceContains:**/requirements.txt"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "secshield.scanCurrentProject",
+        "title": "SecShield: Quét Bảo Mật Dự Án (Dependencies Scan)",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "secshield.setApiKey",
+        "title": "SecShield: Thiết Lập API Key",
+        "icon": "$(key)"
+      },
+      {
+        "command": "secshield.setServerUrl",
+        "title": "SecShield: Cấu Hình Địa Chỉ Máy Chủ (Server URL)",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "secshield.scanCurrentProject",
+          "when": "resourceExtname == .json || resourceExtname == .txt",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "secshield.scanCurrentProject",
+          "when": "resourceFilename == package.json || resourceFilename == requirements.txt",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SecShield Scanner",
+      "properties": {
+        "secshield.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:5000",
+          "description": "Địa chỉ URL của SecShield Scanner Backend"
+        },
+        "secshield.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Mã API Key lấy từ SecShield Web Portal"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "axios": "^1.20.0"
+  }
+}
