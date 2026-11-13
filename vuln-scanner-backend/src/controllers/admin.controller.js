@@ -76,7 +76,7 @@ exports.toggleUserStatus = async (req, res) => {
 };
 
 /**
- * Đổi phân quyền người dùng (User <-> Admin)
+ * Đổi phân quyền người dùng (User <-> Admin) - Khống chế tối đa 1 Admin trong hệ thống
  */
 exports.updateUserRole = async (req, res) => {
   try {
@@ -89,6 +89,17 @@ exports.updateUserRole = async (req, res) => {
 
     if (req.user._id.toString() === userId && role !== 'admin') {
       return res.status(400).json({ success: false, error: 'Không thể tự hạ quyền Admin của chính mình' });
+    }
+
+    // Khống chế nghiêm ngặt: Hệ thống chỉ cho phép duy nhất 1 tài khoản Admin
+    if (role === 'admin') {
+      const existingAdmin = await User.findOne({ role: 'admin', _id: { $ne: userId } });
+      if (existingAdmin) {
+        return res.status(400).json({
+          success: false,
+          error: `Hệ thống đã có Quản trị viên (${existingAdmin.username}). Dự án khống chế chỉ cho phép duy nhất 1 tài khoản Admin!`
+        });
+      }
     }
 
     const user = await User.findByIdAndUpdate(userId, { role }, { new: true });

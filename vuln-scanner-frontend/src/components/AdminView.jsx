@@ -225,7 +225,7 @@ export default function AdminView() {
                   </td>
                   <td style={{ padding: '12px 16px' }}>
                     <span className={`badge ${u.role === 'admin' ? 'badge-cisa' : 'badge-low'}`}>
-                      {(u.role || 'user').toUpperCase()}
+                      {u.role === 'admin' ? 'ADMIN (DUY NHẤT)' : 'KHÁCH (USER)'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px' }}>
@@ -240,24 +240,21 @@ export default function AdminView() {
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: 8 }}>
-                      <button
-                        onClick={() => handleRoleChange(u._id, u.role)}
-                        className="btn-secondary"
-                        style={{ padding: '5px 10px', fontSize: 11 }}
-                        title="Đổi vai trò User / Admin"
-                      >
-                        {u.role === 'admin' ? 'Hạ quyền User' : 'Nâng quyền Admin'}
-                      </button>
-
-                      <button
-                        onClick={() => handleToggleStatus(u._id)}
-                        className={u.isActive ? 'btn-danger' : 'btn-secondary'}
-                        style={{ padding: '5px 10px', fontSize: 11 }}
-                        title={u.isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                      >
-                        {u.isActive ? <Lock size={12} /> : <Unlock size={12} />}
-                        <span>{u.isActive ? 'Khóa' : 'Mở'}</span>
-                      </button>
+                      {u.role !== 'admin' ? (
+                        <button
+                          onClick={() => handleToggleStatus(u._id)}
+                          className={u.isActive ? 'btn-danger' : 'btn-secondary'}
+                          style={{ padding: '5px 10px', fontSize: 11 }}
+                          title={u.isActive ? 'Khóa tài khoản khách' : 'Mở khóa tài khoản khách'}
+                        >
+                          {u.isActive ? <Lock size={12} /> : <Unlock size={12} />}
+                          <span>{u.isActive ? 'Khóa khách' : 'Mở khóa'}</span>
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                          Quản trị viên chính
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>
