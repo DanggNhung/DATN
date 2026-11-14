@@ -156,7 +156,7 @@ export default function ExtensionView({ user, onUpdateUser, onOpenAuth }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Cài đặt file .vsix vào VS Code</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-                Mở VS Code $\rightarrow$ bấm tổ hợp phím <kbd style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border-subtle)' }}>Ctrl+Shift+P</kbd> $\rightarrow$ gõ:
+                Mở VS Code ➔ bấm tổ hợp phím <kbd style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border-subtle)' }}>Ctrl+Shift+P</kbd> ➔ gõ:
               </div>
               <div style={{
                 background: 'var(--bg-primary)',
@@ -194,7 +194,7 @@ export default function ExtensionView({ user, onUpdateUser, onOpenAuth }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Cấu hình API Key</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-                Bấm <kbd style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border-subtle)' }}>Ctrl+Shift+P</kbd> $\rightarrow$ chọn <strong style={{ color: 'var(--text-main)' }}>SecShield: Set API Key</strong> và dán mã API Key phía trên vào.
+                Bấm <kbd style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border-subtle)' }}>Ctrl+Shift+P</kbd> ➔ chọn <strong style={{ color: 'var(--text-main)' }}>SecShield: Set API Key</strong> và dán mã API Key phía trên vào.
               </div>
             </div>
           </div>
@@ -218,7 +218,7 @@ export default function ExtensionView({ user, onUpdateUser, onOpenAuth }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Quét bảo mật tự động</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-                Mở tệp <code className="mono" style={{ color: 'var(--cyber-cyan)' }}>package.json</code> hoặc <code className="mono" style={{ color: 'var(--cyber-cyan)' }}>requirements.txt</code> trong dự án $\rightarrow$ Click chuột phải chọn:
+                Mở tệp <code className="mono" style={{ color: 'var(--cyber-cyan)' }}>package.json</code> hoặc <code className="mono" style={{ color: 'var(--cyber-cyan)' }}>requirements.txt</code> trong dự án ➔ Click chuột phải chọn:
               </div>
               <div style={{
                 background: 'var(--bg-primary)',

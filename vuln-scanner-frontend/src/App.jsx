@@ -107,7 +107,7 @@ export default function App() {
         )}
 
         {activeTab === 'exploitdb' && (
-          <ExploitDbView />
+          <ExploitDbView user={user} />
         )}
 
         {activeTab === 'history' && (
