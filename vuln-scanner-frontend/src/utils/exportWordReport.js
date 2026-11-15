@@ -166,9 +166,13 @@ export async function generateWordReport(scanData) {
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `${summary.riskLevel || 'N/A'} (Điểm: ${summary.riskScore ?? 0}/100)`,
+                    text: `${summary.riskLevel || 'N/A'} (Điểm: ${summary.riskScore ?? 0}/100)${summary.riskLevel === 'INCONCLUSIVE' ? ' - Chưa đủ dữ liệu đánh giá' : ''}`,
                     bold: true,
-                    color: summary.riskLevel === 'CRITICAL' ? 'DC2626' : summary.riskLevel === 'HIGH' ? 'EA580C' : '2563EB',
+                    color: summary.riskLevel === 'CRITICAL' ? 'DC2626' :
+                           summary.riskLevel === 'HIGH' ? 'EA580C' :
+                           summary.riskLevel === 'MEDIUM' ? '2563EB' :
+                           summary.riskLevel === 'LOW' ? '4B5563' :
+                           summary.riskLevel === 'INCONCLUSIVE' ? 'D97706' : '16A34A',
                     font: FONT_NAME
                   })
                 ]
@@ -218,7 +222,63 @@ export async function generateWordReport(scanData) {
   });
 
   docChildren.push(metaTable);
-  docChildren.push(new Paragraph({ spacing: { after: 200 } }));
+  docChildren.push(new Paragraph({ spacing: { after: 140 } }));
+
+  // Ghi chú giải thích phương pháp tính điểm và hạn chế thang điểm (AUD-02 & AUD-01)
+  docChildren.push(
+    new Paragraph({
+      spacing: { before: 100, after: 80 },
+      children: [
+        new TextRun({
+          text: '📌 Ghi chú phương pháp & Hạn chế của thang điểm đánh giá rủi ro (AUD-02):',
+          bold: true,
+          size: 22,
+          color: '1E293B',
+          font: FONT_NAME
+        })
+      ]
+    }),
+    new Paragraph({
+      spacing: { after: 180 },
+      children: [
+        new TextRun({
+          text: '1. Phân cấp mức độ rủi ro (Risk Level): ',
+          bold: true,
+          size: 21,
+          font: FONT_NAME
+        }),
+        new TextRun({
+          text: 'CRITICAL (Điểm 85-100: Có mã khai thác CISA KEV/Exploit-DB hoặc lỗi CRITICAL); HIGH (Điểm 60-84: Lỗi mức độ cao); MEDIUM (Điểm 30-59); LOW (Điểm 10-29); SAFE (0 điểm: Tất cả thư viện được kiểm tra an toàn và không phát hiện lỗ hổng); INCONCLUSIVE (Chưa đủ dữ liệu kết luận).\n',
+          size: 21,
+          font: FONT_NAME
+        }),
+        new TextRun({
+          text: '2. Hạn chế của thang điểm (AUD-02): ',
+          bold: true,
+          color: 'B45309',
+          size: 21,
+          font: FONT_NAME
+        }),
+        new TextRun({
+          text: 'Hệ thống dựa trên dữ liệu CVSS/Severity do Google OSV và NVD cung cấp. Khi phát hiện thư viện dính lỗ hổng nhưng cơ sở dữ liệu chưa xác định được điểm số nghiêm trọng (mức độ UNKNOWN), hệ thống quy định phân loại rủi ro tổng thể là INCONCLUSIVE (Chưa đủ dữ liệu đánh giá) và TUYỆT ĐỐI KHÔNG kết luận là SAFE để tránh ngụy biện an toàn sai lệch cho chuỗi cung ứng phần mềm.\n',
+          color: 'B45309',
+          size: 21,
+          font: FONT_NAME
+        }),
+        new TextRun({
+          text: '3. Giới hạn phạm vi dữ liệu (AUD-01): ',
+          bold: true,
+          size: 21,
+          font: FONT_NAME
+        }),
+        new TextRun({
+          text: 'Trường hợp có gói thư viện bị gián đoạn mạng hoặc timeout với OSV API, hệ thống sẽ đánh dấu cảnh báo phạm vi kiểm thử thay vì gán nhãn an toàn mặc định.',
+          size: 21,
+          font: FONT_NAME
+        })
+      ]
+    })
+  );
 
   // ==================== 3. BẢNG TỔNG HỢP CÁC GÓI CÓ LỖ HỔNG ====================
   docChildren.push(
@@ -269,6 +329,27 @@ export async function generateWordReport(scanData) {
       );
     }
   } else {
+    // AUD-02: Kiểm tra số lượng lỗ hổng chưa xác định severity (UNKNOWN)
+    const unknownVulnsCount = vulnerablePackages.reduce((acc, pkg) => {
+      return acc + (pkg.vulnerabilities || []).filter((v) => (v.severity || '').toUpperCase().trim() === 'UNKNOWN').length;
+    }, 0);
+
+    if (unknownVulnsCount > 0) {
+      docChildren.push(
+        new Paragraph({
+          spacing: { after: 140 },
+          children: [
+            new TextRun({
+              text: `⚠️ Cảnh báo dữ liệu (AUD-02): Có ${unknownVulnsCount} lỗ hổng chưa được công bố đầy đủ điểm CVSS/Severity (UNKNOWN). Hệ thống phản ánh cấp độ rủi ro là ${summary.riskLevel === 'INCONCLUSIVE' ? 'INCONCLUSIVE (Chưa đủ dữ liệu đánh giá)' : summary.riskLevel} và tuyệt đối không kết luận SAFE nhằm đảm bảo an toàn cao nhất.`,
+              bold: true,
+              color: 'B45309',
+              font: FONT_NAME
+            })
+          ]
+        })
+      );
+    }
+
     const summaryTableRows = [
       new TableRow({
         children: [
@@ -470,10 +551,16 @@ export async function generateWordReport(scanData) {
 
       // Chi tiết từng lỗi CVE của package đó
       (pkg.vulnerabilities || []).forEach((vuln, vIdx) => {
+        const sevUpper = (vuln.severity || 'UNKNOWN').toUpperCase().trim();
         const severityColor =
-          vuln.severity === 'CRITICAL' ? 'DC2626' :
-          vuln.severity === 'HIGH' ? 'EA580C' :
-          vuln.severity === 'MEDIUM' ? '2563EB' : '6B7280';
+          sevUpper === 'CRITICAL' ? 'DC2626' :
+          sevUpper === 'HIGH' ? 'EA580C' :
+          sevUpper === 'MEDIUM' ? '2563EB' :
+          sevUpper === 'LOW' ? '4B5563' : 'D97706';
+
+        const severityLabel = sevUpper === 'UNKNOWN'
+          ? 'UNKNOWN (Chưa xác định điểm số CVSS - Cần phân tích bổ sung)'
+          : sevUpper;
 
         const vulnDetailRows = [
           new TableRow({
@@ -515,7 +602,7 @@ export async function generateWordReport(scanData) {
                   new Paragraph({
                     children: [
                       new TextRun({
-                        text: vuln.severity || 'UNKNOWN',
+                        text: severityLabel,
                         bold: true,
                         color: severityColor,
                         font: FONT_NAME

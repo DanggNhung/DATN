@@ -214,7 +214,7 @@ function openReportWebview(context, scanData) {
   );
 
   const { summary, results } = scanData;
-  const riskColor = summary.riskLevel === 'CRITICAL' ? '#ef4444' : summary.riskLevel === 'HIGH' ? '#f59e0b' : '#3b82f6';
+  const riskColor = summary.riskLevel === 'CRITICAL' ? '#ef4444' : summary.riskLevel === 'HIGH' ? '#f59e0b' : summary.riskLevel === 'INCONCLUSIVE' ? '#f97316' : '#3b82f6';
 
   panel.webview.html = `
     <!DOCTYPE html>
@@ -227,6 +227,7 @@ function openReportWebview(context, scanData) {
         .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
         .badge-crit { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid #ef4444; }
         .badge-high { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+        .badge-inconclusive { background: rgba(249,115,22,0.2); color: #fb923c; border: 1px solid #f97316; }
         .badge-safe { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid #10b981; }
         .mono { font-family: monospace; }
         h2, h3 { margin-top: 0; }
@@ -243,7 +244,7 @@ function openReportWebview(context, scanData) {
             <div style="color: #94a3b8; font-size: 13px;">Tệp: ${scanData.fileName || 'Manifest'}</div>
           </div>
           <div style="text-align: right;">
-            <span class="badge ${summary.riskLevel === 'CRITICAL' ? 'badge-crit' : 'badge-high'}" style="font-size: 14px; padding: 4px 10px;">
+            <span class="badge ${summary.riskLevel === 'CRITICAL' ? 'badge-crit' : summary.riskLevel === 'HIGH' ? 'badge-high' : summary.riskLevel === 'INCONCLUSIVE' ? 'badge-inconclusive' : 'badge-safe'}" style="font-size: 14px; padding: 4px 10px;">
               ${summary.riskLevel} (Điểm: ${summary.riskScore})
             </span>
           </div>

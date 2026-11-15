@@ -32,18 +32,63 @@ class ScannerService {
 
   /**
    * Chuẩn hóa mức độ nghiêm trọng (Severity)
+   * AUD-02: Nhận diện chính xác string severity, CVSS numeric score, database_specific và vector CVSS
    */
   static normalizeSeverity(vuln) {
-    if (vuln.database_specific && vuln.database_specific.severity) {
-      const s = vuln.database_specific.severity.toUpperCase();
-      if (s === 'CRITICAL' || s === 'HIGH' || s === 'MEDIUM' || s === 'MODERATE' || s === 'LOW') {
+    if (!vuln) return 'UNKNOWN';
+
+    // 1. Nếu vuln.severity là chuỗi ký tự (CRITICAL, HIGH, MEDIUM, LOW, MODERATE, UNKNOWN)
+    if (typeof vuln.severity === 'string') {
+      const s = vuln.severity.trim().toUpperCase();
+      if (['CRITICAL', 'HIGH', 'MEDIUM', 'MODERATE', 'LOW', 'UNKNOWN'].includes(s)) {
         return s === 'MODERATE' ? 'MEDIUM' : s;
       }
     }
-    // Nếu có CVSS
-    if (vuln.severity && Array.isArray(vuln.severity) && vuln.severity.length > 0) {
-      return 'HIGH'; // Mặc định nếu có CVSS
+
+    // 2. Nếu có database_specific.severity
+    if (vuln.database_specific && vuln.database_specific.severity) {
+      const s = String(vuln.database_specific.severity).trim().toUpperCase();
+      if (['CRITICAL', 'HIGH', 'MEDIUM', 'MODERATE', 'LOW'].includes(s)) {
+        return s === 'MODERATE' ? 'MEDIUM' : s;
+      }
     }
+
+    // 3. Nếu có ecosystem_specific.severity
+    if (vuln.ecosystem_specific && vuln.ecosystem_specific.severity) {
+      const s = String(vuln.ecosystem_specific.severity).trim().toUpperCase();
+      if (['CRITICAL', 'HIGH', 'MEDIUM', 'MODERATE', 'LOW'].includes(s)) {
+        return s === 'MODERATE' ? 'MEDIUM' : s;
+      }
+    }
+
+    // 4. Nếu có mảng CVSS (OSV Schema)
+    if (Array.isArray(vuln.severity) && vuln.severity.length > 0) {
+      for (const item of vuln.severity) {
+        if (!item) continue;
+        const numericScore = parseFloat(item.score);
+        if (!isNaN(numericScore) && numericScore > 0) {
+          if (numericScore >= 9.0) return 'CRITICAL';
+          if (numericScore >= 7.0) return 'HIGH';
+          if (numericScore >= 4.0) return 'MEDIUM';
+          return 'LOW';
+        }
+
+        if (typeof item.score === 'string' && item.score.startsWith('CVSS:')) {
+          const vector = item.score.toUpperCase();
+          if (vector.includes('/C:H/I:H/A:H') && (vector.includes('/AV:N') || vector.includes('/AC:L'))) {
+            return 'CRITICAL';
+          }
+          if (vector.includes('/C:H') || vector.includes('/I:H') || vector.includes('/A:H')) {
+            return 'HIGH';
+          }
+          if (vector.includes('/C:L') || vector.includes('/I:L') || vector.includes('/A:L')) {
+            return 'MEDIUM';
+          }
+          return 'HIGH';
+        }
+      }
+    }
+
     return 'UNKNOWN';
   }
 
@@ -248,6 +293,8 @@ class ScannerService {
 
   /**
    * Tính toán điểm số rủi ro (Risk Score: 0-100) và cấp độ rủi ro (Risk Level)
+   * AUD-01: Phân tách độc lập lỗi kết nối nguồn OSV (INCONCLUSIVE) vs An toàn (SAFE)
+   * AUD-02: Lỗ hổng có severity UNKNOWN không được đánh giá SAFE; phản ánh thành INCONCLUSIVE (Chưa đủ dữ liệu đánh giá)
    */
   static calculateRisk(scanResults) {
     let totalVulns = 0;
@@ -255,28 +302,46 @@ class ScannerService {
     let highCount = 0;
     let mediumCount = 0;
     let lowCount = 0;
+    let unknownCount = 0;
     let cisaKevCount = 0;
     let exploitDbCount = 0;
     let errorCount = 0;
+    let vulnerablePackagesCount = 0;
 
-    for (const item of scanResults) {
+    for (const item of (scanResults || [])) {
+      if (!item) continue;
+
       if (item.hasScanError || item.scanStatus === 'error') {
         errorCount++;
       }
 
       if (item.isVulnerable) {
-        totalVulns += item.totalVulnerabilities;
-        if (item.hasCisaKev) cisaKevCount += 1;
-        if (item.hasExploitDb) exploitDbCount += 1;
+        vulnerablePackagesCount++;
+        const itemVulns = Array.isArray(item.vulnerabilities) ? item.vulnerabilities : [];
+        const declaredTotal = typeof item.totalVulnerabilities === 'number' ? item.totalVulnerabilities : itemVulns.length;
+        const countToAdd = Math.max(declaredTotal, itemVulns.length);
+        totalVulns += countToAdd;
 
-        for (const v of item.vulnerabilities) {
-          if (v.isCisaKev) cisaKevCount += 1;
-          if (v.hasExploitDb) exploitDbCount += (v.exploitDbList || []).length;
-          const sev = (v.severity || '').toUpperCase();
+        // Nếu có danh sách chi tiết các lỗ hổng
+        for (const v of itemVulns) {
+          if (!v) continue;
+          if (v.isCisaKev) cisaKevCount++;
+          if (v.hasExploitDb) {
+            exploitDbCount += (Array.isArray(v.exploitDbList) && v.exploitDbList.length > 0) ? v.exploitDbList.length : 1;
+          }
+          const sev = (v.severity || '').toUpperCase().trim();
           if (sev === 'CRITICAL') criticalCount++;
           else if (sev === 'HIGH') highCount++;
-          else if (sev === 'MEDIUM') mediumCount++;
+          else if (sev === 'MEDIUM' || sev === 'MODERATE') mediumCount++;
           else if (sev === 'LOW') lowCount++;
+          else unknownCount++;
+        }
+
+        // Trường hợp package dính lỗ hổng nhưng không có mảng chi tiết hoặc mảng rỗng
+        if (itemVulns.length === 0) {
+          if (item.hasCisaKev) cisaKevCount++;
+          if (item.hasExploitDb) exploitDbCount++;
+          unknownCount += Math.max(declaredTotal, 1);
         }
       }
     }
@@ -287,22 +352,29 @@ class ScannerService {
 
     if (cisaKevCount > 0 || exploitDbCount > 0 || criticalCount > 0) {
       riskLevel = 'CRITICAL';
-      riskScore = Math.min(100, 85 + (cisaKevCount * 5) + (exploitDbCount * 3) + (criticalCount * 3));
+      riskScore = Math.min(100, 85 + (cisaKevCount * 5) + (exploitDbCount * 3) + (criticalCount * 3) + (highCount * 2) + (unknownCount * 1));
     } else if (highCount > 0) {
       riskLevel = 'HIGH';
-      riskScore = Math.min(84, 60 + (highCount * 5));
+      riskScore = Math.min(84, 60 + (highCount * 5) + (mediumCount * 2) + (unknownCount * 2));
     } else if (mediumCount > 0) {
       riskLevel = 'MEDIUM';
-      riskScore = Math.min(59, 30 + (mediumCount * 5));
+      riskScore = Math.min(59, 30 + (mediumCount * 5) + (lowCount * 2) + (unknownCount * 2));
     } else if (lowCount > 0) {
       riskLevel = 'LOW';
-      riskScore = Math.min(29, 10 + (lowCount * 3));
+      riskScore = Math.min(29, 10 + (lowCount * 3) + (unknownCount * 2));
+    } else if (unknownCount > 0 || vulnerablePackagesCount > 0 || totalVulns > 0) {
+      // AUD-02: Có lỗ hổng bảo mật nhưng chỉ có mức độ UNKNOWN (chưa có điểm CVSS)
+      // TUYỆT ĐỐI KHÔNG ĐƯỢC kết luận SAFE! Phản ánh thành chưa đủ dữ liệu đánh giá (INCONCLUSIVE)
+      // Ghi nhận điểm cảnh báo tối thiểu thay vì 0 điểm an toàn
+      riskLevel = 'INCONCLUSIVE';
+      riskScore = Math.min(35, 15 + (unknownCount * 3));
     } else if (errorCount > 0) {
-      // AUD-01: Nếu không phát hiện lỗ hổng nhưng có gói bị lỗi truy vấn OSV,
+      // AUD-01: Không phát hiện lỗ hổng nhưng có gói bị lỗi truy vấn nguồn OSV,
       // KHÔNG ĐƯỢC kết luận SAFE! Đánh dấu INCONCLUSIVE (chưa đủ dữ liệu kết luận)
       riskLevel = 'INCONCLUSIVE';
       riskScore = 0;
     } else {
+      // Chỉ khi toàn bộ gói quét thành công và 0 lỗ hổng mới kết luận SAFE
       riskLevel = 'SAFE';
       riskScore = 0;
     }
@@ -316,8 +388,12 @@ class ScannerService {
       highCount,
       mediumCount,
       lowCount,
+      unknownCount,
+      totalVulns,
+      vulnerablePackagesCount,
       errorCount,
-      hasScanErrors: errorCount > 0
+      hasScanErrors: errorCount > 0,
+      hasUnknownSeverity: unknownCount > 0
     };
   }
 }

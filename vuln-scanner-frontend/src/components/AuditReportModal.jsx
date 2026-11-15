@@ -24,6 +24,12 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
 
   const vulnerablePackages = results.filter((p) => p.isVulnerable);
   const totalVulnsCount = vulnerablePackages.reduce((acc, p) => acc + (p.vulnerabilities?.length || 0), 0);
+  
+  // AUD-02: Kiểm tra lỗ hổng chưa xác định severity (UNKNOWN)
+  const unknownVulnsCount = vulnerablePackages.reduce((acc, p) => {
+    return acc + (p.vulnerabilities || []).filter((v) => (v.severity || '').toUpperCase().trim() === 'UNKNOWN').length;
+  }, 0);
+  const hasUnknownVulns = summary.hasUnknownSeverity || summary.unknownCount > 0 || (unknownVulnsCount > 0 && vulnerablePackages.length > 0);
 
   const getRiskColor = (level) => {
     switch (level) {
@@ -201,8 +207,32 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
           </div>
         )}
 
+        {/* AUD-02 Alert Banner for UNKNOWN severity */}
+        {hasUnknownVulns && (
+          <div style={{
+            borderLeft: '4px solid #f97316',
+            background: '#fff7ed',
+            padding: '12px 16px',
+            borderRadius: 6,
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <AlertTriangle size={22} color="#ea580c" style={{ flexShrink: 0 }} />
+            <div>
+              <strong style={{ color: '#c2410c', fontSize: 14 }}>
+                CẢNH BÁO DỮ LIỆU & HẠN CHẾ THANG ĐIỂM (AUD-02):
+              </strong>
+              <div style={{ fontSize: 13, color: '#9a3412', marginTop: 2 }}>
+                Phát hiện {summary.unknownCount || unknownVulnsCount} lỗ hổng chưa được công bố đầy đủ điểm số CVSS/Severity (mức độ UNKNOWN). Hệ thống xếp loại rủi ro tổng thể là <strong>INCONCLUSIVE (Chưa đủ dữ liệu đánh giá)</strong> và <strong>tuyệt đối không kết luận an toàn (SAFE)</strong> nhằm tránh rủi ro tiềm ẩn cho chuỗi cung ứng phần mềm.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Metric Cards Summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 24 }}>
           <div style={{ border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 14px', textAlign: 'center', background: '#ffffff' }}>
             <div style={{ fontSize: 12, color: '#475569', fontWeight: 600 }}>Tổng Thư Viện Quét</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>
@@ -231,6 +261,15 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
             </div>
           </div>
 
+          {hasUnknownVulns && (
+            <div style={{ border: '1px solid #fed7aa', borderRadius: 6, padding: '10px 14px', textAlign: 'center', background: '#fff7ed' }}>
+              <div style={{ fontSize: 12, color: '#c2410c', fontWeight: 600 }}>Lỗi Chưa Rõ Severity</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#ea580c', marginTop: 2 }}>
+                {summary.unknownCount || unknownVulnsCount}
+              </div>
+            </div>
+          )}
+
           {(summary.errorPackages > 0 || results.some((p) => p.hasScanError)) && (
             <div style={{ border: '1px solid #fde68a', borderRadius: 6, padding: '10px 14px', textAlign: 'center', background: '#fefce8' }}>
               <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>Lỗi Kiểm Tra OSV</div>
@@ -239,6 +278,23 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Scoring Scale & Limitation Notice (AUD-02) */}
+        <div style={{
+          marginBottom: 24,
+          padding: '12px 16px',
+          background: '#f8fafc',
+          border: '1px solid #cbd5e1',
+          borderRadius: 6,
+          fontSize: 12,
+          lineHeight: 1.5,
+          color: '#334155'
+        }}>
+          <strong style={{ color: '#0f172a' }}>📌 Ghi chú phương pháp & Hạn chế thang điểm đánh giá rủi ro (AUD-02):</strong>
+          <div style={{ marginTop: 4 }}>
+            Thang điểm rủi ro (0-100) phân cấp từ CRITICAL (85-100), HIGH (60-84), MEDIUM (30-59), LOW (10-29), SAFE (0 - An toàn tuyệt đối) đến INCONCLUSIVE (Chưa đủ dữ liệu). Hệ thống <strong>chỉ kết luận SAFE khi toàn bộ thư viện được xác minh thành công và không có lỗ hổng</strong>. Trường hợp phát hiện lỗ hổng nhưng severity là UNKNOWN, hệ thống phân loại <strong>INCONCLUSIVE</strong> và không dùng kết luận SAFE để đảm bảo tính an toàn nghiêm ngặt.
+          </div>
         </div>
 
         {/* Section 1: Summary Table */}
@@ -338,9 +394,12 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
 
                 <div style={{ padding: 12 }}>
                   {(pkg.vulnerabilities || []).map((vuln, vIdx) => {
-                    const isCrit = vuln.severity === 'CRITICAL';
-                    const isHigh = vuln.severity === 'HIGH';
-                    const badgeColor = isCrit ? '#dc2626' : isHigh ? '#ea580c' : '#2563eb';
+                    const sevUpper = (vuln.severity || '').toUpperCase().trim();
+                    const badgeColor =
+                      sevUpper === 'CRITICAL' ? '#dc2626' :
+                      sevUpper === 'HIGH' ? '#ea580c' :
+                      sevUpper === 'MEDIUM' ? '#2563eb' :
+                      sevUpper === 'LOW' ? '#4b5563' : '#d97706';
 
                     return (
                       <div key={vIdx} style={{

@@ -31,6 +31,12 @@ export default function ScanResultView({ scanData, onBack }) {
   const displayFileName = decodeUtf8Safe(fileName) || 'manifest.json';
   const displayFileType = (fileType || 'npm').toUpperCase();
 
+  // AUD-02: Kiểm tra các lỗ hổng có mức độ UNKNOWN
+  const unknownVulnCount = (results || []).reduce((acc, p) => {
+    return acc + (p.vulnerabilities || []).filter((v) => (v.severity || '').toUpperCase().trim() === 'UNKNOWN').length;
+  }, 0);
+  const hasUnknownVulns = summary.hasUnknownSeverity || summary.unknownCount > 0 || (unknownVulnCount > 0 && summary.vulnerablePackages > 0);
+
   // Lọc danh sách packages
   const filteredResults = (results || []).filter((pkg) => {
     const matchesSearch = pkg.package.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -231,6 +237,15 @@ export default function ScanResultView({ scanData, onBack }) {
               <div style={{ fontSize: 22, fontWeight: 800, color: '#fbbf24', marginTop: 4 }}>{summary.errorPackages}</div>
             </div>
           )}
+
+          {hasUnknownVulns && (
+            <div style={{ background: 'rgba(249, 115, 22, 0.1)', padding: '14px 16px', borderRadius: 8, border: '1px solid rgba(249, 115, 22, 0.4)' }}>
+              <div style={{ fontSize: 12, color: '#f97316' }}>Lỗi chưa rõ Severity</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#f97316', marginTop: 4 }}>
+                {summary.unknownCount || unknownVulnCount}
+              </div>
+            </div>
+          )}
         </div>
 
         {summary.hasScanErrors && (
@@ -248,6 +263,25 @@ export default function ScanResultView({ scanData, onBack }) {
             <AlertCircle size={20} style={{ flexShrink: 0 }} />
             <div style={{ fontSize: 13, lineHeight: 1.4 }}>
               <strong>Cảnh báo dữ liệu (AUD-01):</strong> Có <strong>{summary.errorPackages}</strong> gói thư viện gặp lỗi timeout hoặc gián đoạn kết nối tới nguồn Google OSV. Hệ thống <strong>không kết luận an toàn (SAFE)</strong> cho các gói chưa được kiểm tra thành công.
+            </div>
+          </div>
+        )}
+
+        {hasUnknownVulns && (
+          <div style={{
+            background: 'rgba(249, 115, 22, 0.1)',
+            border: '1px solid rgba(249, 115, 22, 0.4)',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginTop: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            color: '#fb923c'
+          }}>
+            <AlertTriangle size={20} style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+              <strong>Hạn chế thang điểm đánh giá (AUD-02):</strong> Có <strong>{summary.unknownCount || unknownVulnCount}</strong> lỗ hổng chưa được công bố đầy đủ điểm CVSS/Severity (UNKNOWN). Hệ thống xếp cấp độ rủi ro là <strong>INCONCLUSIVE (Chưa đủ dữ liệu đánh giá)</strong> và <strong>tuyệt đối không kết luận SAFE</strong> nhằm tránh bỏ sót rủi ro tiềm ẩn cho chuỗi cung ứng.
             </div>
           </div>
         )}

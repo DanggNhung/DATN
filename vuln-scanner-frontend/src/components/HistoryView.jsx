@@ -65,6 +65,7 @@ export default function HistoryView({ user, onViewScan, onOpenAuth }) {
       case 'HIGH': return <span className="badge badge-high">HIGH</span>;
       case 'MEDIUM': return <span className="badge badge-medium">MEDIUM</span>;
       case 'LOW': return <span className="badge badge-low">LOW</span>;
+      case 'INCONCLUSIVE': return <span className="badge" style={{ background: 'rgba(249, 115, 22, 0.2)', color: '#f97316', border: '1px solid #f97316' }}>INCONCLUSIVE</span>;
       default: return <span className="badge badge-safe">SAFE</span>;
     }
   };

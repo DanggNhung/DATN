@@ -88,6 +88,12 @@ const scanSchema = new mongoose.Schema(
       safePackages: { type: Number, default: 0 },
       errorPackages: { type: Number, default: 0 },
       hasScanErrors: { type: Boolean, default: false },
+      hasUnknownSeverity: { type: Boolean, default: false }, // AUD-02
+      unknownCount: { type: Number, default: 0 },            // AUD-02
+      criticalCount: { type: Number, default: 0 },
+      highCount: { type: Number, default: 0 },
+      mediumCount: { type: Number, default: 0 },
+      lowCount: { type: Number, default: 0 },
       cisaKevCount: { type: Number, default: 0 },
       riskScore: { type: Number, default: 0 }, // 0 - 100
       riskLevel: {
