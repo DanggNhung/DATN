@@ -48,9 +48,13 @@ class ScannerService {
   }
 
   /**
-   * Truy vấn OSV cho một thư viện cụ thể
+   * Truy vấn OSV cho một thư viện cụ thể với phân tách khối lỗi độc lập (AUD-01)
    */
   static async queryOsv(name, version, ecosystem) {
+    let rawVulns = [];
+    let osvError = null;
+
+    // KHỐI 1: Truy vấn Google OSV API độc lập
     try {
       const response = await axios.post(
         OSV_API_URL,
@@ -64,72 +68,135 @@ class ScannerService {
         { timeout: 10000 }
       );
 
-      if (!response.data || !response.data.vulns || !Array.isArray(response.data.vulns)) {
-        return [];
+      if (response.data && Array.isArray(response.data.vulns)) {
+        rawVulns = response.data.vulns;
       }
+    } catch (error) {
+      osvError = error.code === 'ECONNABORTED'
+        ? 'Kết nối tới OSV API bị quá thời gian (timeout 10s)'
+        : (error.response?.data?.message || error.message || 'Lỗi truy vấn OSV API');
+      console.error(`[-] [OSV Error] Thư viện ${name}@${version}:`, osvError);
 
-      // Thu thập toàn bộ ID và alias CVE để đối chiếu với CISA KEV
-      const allCandidateCves = [];
-      const parsedVulns = response.data.vulns.map((v) => {
-        const aliases = Array.isArray(v.aliases) ? v.aliases : [];
-        const candidateCves = [v.id, ...aliases].filter((c) => c && c.startsWith('CVE-'));
-        allCandidateCves.push(...candidateCves);
+      // QUAN TRỌNG (AUD-01): Lỗi nguồn OSV trả về trạng thái error rõ ràng,
+      // KHÔNG nuốt lỗi thành mảng rỗng [] khiến thư viện bị đánh nhãn sai thành SAFE!
+      return {
+        success: false,
+        status: 'error',
+        errorMessage: osvError,
+        vulnerabilities: [],
+        sources: {
+          osv: { status: 'error', error: osvError },
+          cisaKev: { status: 'skipped', error: null },
+          exploitDb: { status: 'skipped', error: null }
+        }
+      };
+    }
 
-        return {
-          id: v.id,
-          aliases: aliases,
-          candidateCves: candidateCves,
-          summary: v.summary || 'Không có mô tả ngắn',
-          details: v.details || '',
-          severity: this.normalizeSeverity(v),
-          fixed: this.extractFixedVersion(v.affected),
-          references: (v.references || []).map((r) => r.url).slice(0, 5)
-        };
-      });
+    // Nếu OSV thành công và không phát hiện lỗ hổng
+    if (rawVulns.length === 0) {
+      return {
+        success: true,
+        status: 'scanned',
+        errorMessage: null,
+        vulnerabilities: [],
+        sources: {
+          osv: { status: 'success', error: null },
+          cisaKev: { status: 'skipped', error: null },
+          exploitDb: { status: 'skipped', error: null }
+        }
+      };
+    }
 
-      // Đối chiếu chéo với CISA KEV
-      const cisaMap = await CisaService.checkVulnerabilities(allCandidateCves);
+    // Thu thập toàn bộ ID và alias CVE để đối chiếu nguồn dữ liệu phụ
+    const allCandidateCves = [];
+    const parsedVulns = rawVulns.map((v) => {
+      const aliases = Array.isArray(v.aliases) ? v.aliases : [];
+      const candidateCves = [v.id, ...aliases].filter((c) => c && c.startsWith('CVE-'));
+      allCandidateCves.push(...candidateCves);
 
-      // Gắn kết quả CISA KEV và Exploit-DB vào từng lỗ hổng
-      return parsedVulns.map((v) => {
-        let isCisaKev = false;
-        let cisaKevDetails = null;
-        const exploitDbList = [];
+      return {
+        id: v.id,
+        aliases: aliases,
+        candidateCves: candidateCves,
+        summary: v.summary || 'Không có mô tả ngắn',
+        details: v.details || '',
+        severity: this.normalizeSeverity(v),
+        fixed: this.extractFixedVersion(v.affected),
+        references: (v.references || []).map((r) => r.url).slice(0, 5)
+      };
+    });
 
-        for (const cve of v.candidateCves) {
-          const upperCve = cve.toUpperCase();
-          if (cisaMap.has(upperCve)) {
-            isCisaKev = true;
-            const cisaRecord = cisaMap.get(upperCve);
-            cisaKevDetails = {
-              cveID: cisaRecord.cveID,
-              vulnerabilityName: cisaRecord.vulnerabilityName,
-              dateAdded: cisaRecord.dateAdded,
-              requiredAction: cisaRecord.requiredAction,
-              knownRansomwareCampaignUse: cisaRecord.knownRansomwareCampaignUse
-            };
-          }
+    // KHỐI 2: Đối chiếu chéo với CISA KEV trong try/catch độc lập
+    let cisaMap = new Map();
+    let cisaStatus = 'success';
+    let cisaError = null;
+    try {
+      cisaMap = await CisaService.checkVulnerabilities(allCandidateCves);
+    } catch (err) {
+      cisaStatus = 'error';
+      cisaError = err.message || 'Lỗi đối chiếu CISA KEV';
+      console.warn(`[!] [CISA KEV Warning] Không thể đối chiếu KEV cho ${name}:`, cisaError);
+    }
 
-          // Kiểm tra Exploit-DB PoC
-          const edbMatches = ExploitDbService.findExploitsByCve(upperCve);
-          if (edbMatches.length > 0) {
-            exploitDbList.push(...edbMatches);
-          }
+    // KHỐI 3: Kiểm tra Exploit-DB PoC trong try/catch độc lập
+    let exploitDbStatus = 'success';
+    let exploitDbError = null;
+
+    // Gắn kết quả CISA KEV và Exploit-DB vào từng lỗ hổng mà không làm mất phát hiện OSV
+    const finalVulns = parsedVulns.map((v) => {
+      let isCisaKev = false;
+      let cisaKevDetails = null;
+      const exploitDbList = [];
+
+      for (const cve of v.candidateCves) {
+        const upperCve = cve.toUpperCase();
+
+        if (cisaMap.has(upperCve)) {
+          isCisaKev = true;
+          const cisaRecord = cisaMap.get(upperCve);
+          cisaKevDetails = {
+            cveID: cisaRecord.cveID,
+            vulnerabilityName: cisaRecord.vulnerabilityName,
+            dateAdded: cisaRecord.dateAdded,
+            requiredAction: cisaRecord.requiredAction,
+            knownRansomwareCampaignUse: cisaRecord.knownRansomwareCampaignUse
+          };
         }
 
-        // Loại bỏ trường tạm candidateCves
-        const { candidateCves, ...finalVuln } = v;
-        return {
-          ...finalVuln,
-          isCisaKev: isCisaKev,
-          cisaKevDetails: cisaKevDetails,
-          hasExploitDb: exploitDbList.length > 0,
-          exploitDbList: exploitDbList
-        };
-      });
-    } catch (error) {
-      return [];
-    }
+        try {
+          const edbMatches = ExploitDbService.findExploitsByCve(upperCve);
+          if (edbMatches && edbMatches.length > 0) {
+            exploitDbList.push(...edbMatches);
+          }
+        } catch (edbErr) {
+          exploitDbStatus = 'error';
+          exploitDbError = edbErr.message;
+        }
+      }
+
+      const { candidateCves, ...finalVuln } = v;
+      return {
+        ...finalVuln,
+        isCisaKev: isCisaKev,
+        cisaKevDetails: cisaKevDetails,
+        hasExploitDb: exploitDbList.length > 0,
+        exploitDbList: exploitDbList
+      };
+    });
+
+    const isPartial = cisaStatus === 'error' || exploitDbStatus === 'error';
+
+    return {
+      success: true,
+      status: isPartial ? 'partial' : 'scanned',
+      errorMessage: cisaError || exploitDbError || null,
+      vulnerabilities: finalVulns,
+      sources: {
+        osv: { status: 'success', error: null },
+        cisaKev: { status: cisaStatus, error: cisaError },
+        exploitDb: { status: exploitDbStatus, error: exploitDbError }
+      }
+    };
   }
 
   /**
@@ -142,7 +209,9 @@ class ScannerService {
     for (let i = 0; i < packages.length; i += batchSize) {
       const batch = packages.slice(i, i + batchSize);
       const batchPromises = batch.map(async (pkg) => {
-        const vulnerabilities = await this.queryOsv(pkg.name, pkg.version, pkg.ecosystem);
+        const queryRes = await this.queryOsv(pkg.name, pkg.version, pkg.ecosystem);
+        const isSuccess = queryRes.success;
+        const vulnerabilities = queryRes.vulnerabilities || [];
         const hasCisaKev = vulnerabilities.some((v) => v.isCisaKev);
         const hasExploitDb = vulnerabilities.some((v) => v.hasExploitDb);
 
@@ -156,7 +225,12 @@ class ScannerService {
           package: pkg.name,
           version: pkg.version,
           ecosystem: pkg.ecosystem,
-          isVulnerable: vulnerabilities.length > 0,
+          scanStatus: queryRes.status, // 'scanned' | 'error' | 'partial'
+          scanError: queryRes.errorMessage,
+          sources: queryRes.sources,
+          isVulnerable: isSuccess ? vulnerabilities.length > 0 : false,
+          isSafe: isSuccess && vulnerabilities.length === 0, // AUD-01: Chỉ an toàn khi truy vấn OSV thành công và không có lỗ hổng
+          hasScanError: !isSuccess,
           hasCisaKev: hasCisaKev,
           hasExploitDb: hasExploitDb,
           totalVulnerabilities: vulnerabilities.length,
@@ -183,8 +257,13 @@ class ScannerService {
     let lowCount = 0;
     let cisaKevCount = 0;
     let exploitDbCount = 0;
+    let errorCount = 0;
 
     for (const item of scanResults) {
+      if (item.hasScanError || item.scanStatus === 'error') {
+        errorCount++;
+      }
+
       if (item.isVulnerable) {
         totalVulns += item.totalVulnerabilities;
         if (item.hasCisaKev) cisaKevCount += 1;
@@ -193,7 +272,7 @@ class ScannerService {
         for (const v of item.vulnerabilities) {
           if (v.isCisaKev) cisaKevCount += 1;
           if (v.hasExploitDb) exploitDbCount += (v.exploitDbList || []).length;
-          const sev = v.severity.toUpperCase();
+          const sev = (v.severity || '').toUpperCase();
           if (sev === 'CRITICAL') criticalCount++;
           else if (sev === 'HIGH') highCount++;
           else if (sev === 'MEDIUM') mediumCount++;
@@ -218,6 +297,11 @@ class ScannerService {
     } else if (lowCount > 0) {
       riskLevel = 'LOW';
       riskScore = Math.min(29, 10 + (lowCount * 3));
+    } else if (errorCount > 0) {
+      // AUD-01: Nếu không phát hiện lỗ hổng nhưng có gói bị lỗi truy vấn OSV,
+      // KHÔNG ĐƯỢC kết luận SAFE! Đánh dấu INCONCLUSIVE (chưa đủ dữ liệu kết luận)
+      riskLevel = 'INCONCLUSIVE';
+      riskScore = 0;
     } else {
       riskLevel = 'SAFE';
       riskScore = 0;
@@ -231,7 +315,9 @@ class ScannerService {
       criticalCount,
       highCount,
       mediumCount,
-      lowCount
+      lowCount,
+      errorCount,
+      hasScanErrors: errorCount > 0
     };
   }
 }

@@ -31,6 +31,7 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
       case 'HIGH': return '#d97706';
       case 'MEDIUM': return '#2563eb';
       case 'LOW': return '#4b5563';
+      case 'INCONCLUSIVE': return '#ea580c';
       default: return '#059669';
     }
   };
@@ -226,9 +227,18 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
           <div style={{ border: '1px solid #86efac', borderRadius: 6, padding: '10px 14px', textAlign: 'center', background: '#f0fdf4' }}>
             <div style={{ fontSize: 12, color: '#15803d', fontWeight: 600 }}>Thư Viện An Toàn</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 2 }}>
-              {summary.safePackages ?? (results.length - vulnerablePackages.length)}
+              {summary.safePackages ?? results.filter((p) => p.isSafe).length}
             </div>
           </div>
+
+          {(summary.errorPackages > 0 || results.some((p) => p.hasScanError)) && (
+            <div style={{ border: '1px solid #fde68a', borderRadius: 6, padding: '10px 14px', textAlign: 'center', background: '#fefce8' }}>
+              <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>Lỗi Kiểm Tra OSV</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#d97706', marginTop: 2 }}>
+                {summary.errorPackages ?? results.filter((p) => p.hasScanError).length}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Section 1: Summary Table */}
@@ -238,9 +248,15 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
           </h2>
 
           {vulnerablePackages.length === 0 ? (
-            <div style={{ padding: '12px 16px', background: '#f0fdf4', color: '#16a34a', borderRadius: 6, fontSize: 14, fontWeight: 600 }}>
-              ✓ Không phát hiện lỗ hổng bảo mật nào trong các thư viện phụ thuộc của dự án.
-            </div>
+            (summary.hasScanErrors || summary.errorPackages > 0 || results.some((p) => p.hasScanError)) ? (
+              <div style={{ padding: '12px 16px', background: '#fffbeb', color: '#b45309', borderRadius: 6, fontSize: 13, border: '1px solid #fde68a' }}>
+                ⚠️ <strong>Phạm vi dữ liệu:</strong> Quá trình kiểm tra ghi nhận {summary.errorPackages || results.filter((p) => p.hasScanError).length} gói thư viện gặp sự cố kết nối tới nguồn Google OSV. Trong phạm vi các gói đã truy vấn thành công ({summary.safePackages ?? results.filter((p) => p.isSafe).length} gói), không phát hiện lỗ hổng. Chưa thể kết luận an toàn tuyệt đối cho toàn bộ dự án.
+              </div>
+            ) : (
+              <div style={{ padding: '12px 16px', background: '#f0fdf4', color: '#16a34a', borderRadius: 6, fontSize: 14, fontWeight: 600 }}>
+                ✓ Toàn bộ {summary.safePackages ?? results.length} gói thư viện đã được xác minh thành công và không phát hiện lỗ hổng bảo mật.
+              </div>
+            )
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left', fontFamily: "'Times New Roman', Times, serif" }}>
               <thead>

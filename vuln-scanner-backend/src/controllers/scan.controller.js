@@ -69,15 +69,22 @@ exports.scanFile = async (req, res) => {
     // 2. Thực hiện quét danh sách thư viện qua OSV và đối chiếu CISA KEV
     const results = await ScannerService.scanDependencies(packages);
 
-    // 3. Tính toán các chỉ số thống kê & mức độ rủi ro
+    // 3. Tính toán các chỉ số thống kê & mức độ rủi ro (AUD-01: Phân biệt rõ an toàn vs lỗi kiểm tra)
     const vulnerableCount = results.filter((item) => item.isVulnerable).length;
-    const safeCount = results.length - vulnerableCount;
+    const safeCount = results.filter((item) => item.isSafe).length;
+    const errorCount = results.filter((item) => item.hasScanError || item.scanStatus === 'error').length;
     const riskAnalysis = ScannerService.calculateRisk(results);
 
     // Xóa file tạm sau khi đã xử lý
     if (fs.existsSync(uploadedFilePath)) {
       fs.unlinkSync(uploadedFilePath);
       uploadedFilePath = null;
+    }
+
+    // Xác định trạng thái quét tổng quát
+    let scanStatus = 'completed';
+    if (errorCount > 0) {
+      scanStatus = errorCount === packages.length ? 'failed' : 'partial';
     }
 
     // 4. Lưu kết quả vào MongoDB
@@ -91,12 +98,14 @@ exports.scanFile = async (req, res) => {
         totalPackages: packages.length,
         vulnerablePackages: vulnerableCount,
         safePackages: safeCount,
+        errorPackages: errorCount,
+        hasScanErrors: errorCount > 0,
         cisaKevCount: riskAnalysis.cisaKevCount,
         riskScore: riskAnalysis.riskScore,
         riskLevel: riskAnalysis.riskLevel
       },
       results: results,
-      status: 'completed'
+      status: scanStatus
     });
 
     return res.json({
@@ -155,8 +164,14 @@ exports.scanRaw = async (req, res) => {
     // Quét thư viện
     const results = await ScannerService.scanDependencies(packages);
     const vulnerableCount = results.filter((item) => item.isVulnerable).length;
-    const safeCount = results.length - vulnerableCount;
+    const safeCount = results.filter((item) => item.isSafe).length;
+    const errorCount = results.filter((item) => item.hasScanError || item.scanStatus === 'error').length;
     const riskAnalysis = ScannerService.calculateRisk(results);
+
+    let scanStatus = 'completed';
+    if (errorCount > 0) {
+      scanStatus = errorCount === packages.length ? 'failed' : 'partial';
+    }
 
     // Lưu vào CSDL
     const scanRecord = await Scan.create({
@@ -169,12 +184,14 @@ exports.scanRaw = async (req, res) => {
         totalPackages: packages.length,
         vulnerablePackages: vulnerableCount,
         safePackages: safeCount,
+        errorPackages: errorCount,
+        hasScanErrors: errorCount > 0,
         cisaKevCount: riskAnalysis.cisaKevCount,
         riskScore: riskAnalysis.riskScore,
         riskLevel: riskAnalysis.riskLevel
       },
       results: results,
-      status: 'completed'
+      status: scanStatus
     });
 
     return res.json({

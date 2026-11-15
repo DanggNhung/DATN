@@ -40,7 +40,8 @@ export default function ScanResultView({ scanData, onBack }) {
 
     if (filterType === 'vulnerable') return pkg.isVulnerable;
     if (filterType === 'cisa') return pkg.hasCisaKev;
-    if (filterType === 'safe') return !pkg.isVulnerable;
+    if (filterType === 'safe') return pkg.isSafe || (!pkg.isVulnerable && !pkg.hasScanError && pkg.scanStatus !== 'error');
+    if (filterType === 'error') return pkg.hasScanError || pkg.scanStatus === 'error';
     return true;
   });
 
@@ -68,6 +69,7 @@ export default function ScanResultView({ scanData, onBack }) {
       case 'HIGH': return '#f59e0b';
       case 'MEDIUM': return '#3b82f6';
       case 'LOW': return '#94a3b8';
+      case 'INCONCLUSIVE': return '#f97316';
       default: return '#10b981';
     }
   };
@@ -215,14 +217,40 @@ export default function ScanResultView({ scanData, onBack }) {
 
           <div style={{ background: 'var(--bg-primary)', padding: '14px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: '#34d399' }}>Thư viện an toàn</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#34d399', marginTop: 4 }}>{summary.safePackages}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#34d399', marginTop: 4 }}>{summary.safePackages ?? 0}</div>
           </div>
 
           <div style={{ background: 'var(--bg-primary)', padding: '14px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: 'var(--cyber-purple)' }}>Cảnh báo CISA KEV</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--cyber-purple)', marginTop: 4 }}>{summary.cisaKevCount}</div>
           </div>
+
+          {summary.errorPackages > 0 && (
+            <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '14px 16px', borderRadius: 8, border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+              <div style={{ fontSize: 12, color: '#fbbf24' }}>Lỗi kiểm tra (OSV)</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#fbbf24', marginTop: 4 }}>{summary.errorPackages}</div>
+            </div>
+          )}
         </div>
+
+        {summary.hasScanErrors && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginTop: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            color: '#fbbf24'
+          }}>
+            <AlertCircle size={20} style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+              <strong>Cảnh báo dữ liệu (AUD-01):</strong> Có <strong>{summary.errorPackages}</strong> gói thư viện gặp lỗi timeout hoặc gián đoạn kết nối tới nguồn Google OSV. Hệ thống <strong>không kết luận an toàn (SAFE)</strong> cho các gói chưa được kiểm tra thành công.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -320,8 +348,26 @@ export default function ScanResultView({ scanData, onBack }) {
               cursor: 'pointer'
             }}
           >
-            An toàn ({summary.safePackages})
+            An toàn ({summary.safePackages ?? 0})
           </button>
+
+          {summary.errorPackages > 0 && (
+            <button
+              onClick={() => setFilterType('error')}
+              style={{
+                background: filterType === 'error' ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                color: filterType === 'error' ? '#fbbf24' : 'var(--text-dim)',
+                border: filterType === 'error' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-subtle)',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Lỗi kiểm tra ({summary.errorPackages})
+            </button>
+          )}
         </div>
       </div>
 
@@ -329,22 +375,26 @@ export default function ScanResultView({ scanData, onBack }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {filteredResults.map((pkg, idx) => {
           const isExpanded = expandedPkg === idx;
+          const hasError = pkg.hasScanError || pkg.scanStatus === 'error';
+          const borderColor = pkg.isVulnerable ? '#ef4444' : hasError ? '#f59e0b' : '#10b981';
+          const iconBg = pkg.isVulnerable ? 'rgba(239, 68, 68, 0.15)' : hasError ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+          const iconColor = pkg.isVulnerable ? '#f87171' : hasError ? '#fbbf24' : '#34d399';
 
           return (
-            <div key={idx} className="glass-card" style={{ padding: 18, borderLeft: pkg.isVulnerable ? '4px solid #ef4444' : '4px solid #10b981' }}>
+            <div key={idx} className="glass-card" style={{ padding: 18, borderLeft: `4px solid ${borderColor}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 36,
                     height: 36,
                     borderRadius: 8,
-                    background: pkg.isVulnerable ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                    color: pkg.isVulnerable ? '#f87171' : '#34d399',
+                    background: iconBg,
+                    color: iconColor,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    {pkg.isVulnerable ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
+                    {pkg.isVulnerable ? <AlertTriangle size={18} /> : hasError ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
                   </div>
 
                   <div>
@@ -355,6 +405,14 @@ export default function ScanResultView({ scanData, onBack }) {
                         {pkg.ecosystem}
                       </span>
                     </div>
+
+                    {/* Error information if scan failed */}
+                    {hasError && (
+                      <div style={{ fontSize: 12, color: '#fbbf24', marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <AlertCircle size={13} />
+                        <span><strong>Trạng thái:</strong> {pkg.scanError || 'Không thể kết nối nguồn Google OSV'}</span>
+                      </div>
+                    )}
 
                     {/* Remediation Suggestion */}
                     {pkg.isVulnerable && pkg.fixedVersion && (
@@ -379,7 +437,11 @@ export default function ScanResultView({ scanData, onBack }) {
                     </span>
                   )}
 
-                  {pkg.isVulnerable ? (
+                  {hasError ? (
+                    <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>
+                      Chưa kiểm tra (Lỗi OSV)
+                    </span>
+                  ) : pkg.isVulnerable ? (
                     <span className="badge badge-critical">
                       {pkg.totalVulnerabilities} lỗ hổng CVE
                     </span>

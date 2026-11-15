@@ -26,7 +26,30 @@ const packageResultSchema = new mongoose.Schema(
     version: { type: String, required: true },
     ecosystem: { type: String, required: true },
     isVulnerable: { type: Boolean, default: false },
+    isSafe: { type: Boolean, default: false },
+    hasScanError: { type: Boolean, default: false },
+    scanStatus: {
+      type: String,
+      enum: ['scanned', 'error', 'partial'],
+      default: 'scanned'
+    },
+    scanError: { type: String, default: null },
+    sources: {
+      osv: {
+        status: { type: String, default: 'pending' },
+        error: { type: String, default: null }
+      },
+      cisaKev: {
+        status: { type: String, default: 'pending' },
+        error: { type: String, default: null }
+      },
+      exploitDb: {
+        status: { type: String, default: 'pending' },
+        error: { type: String, default: null }
+      }
+    },
     hasCisaKev: { type: Boolean, default: false },
+    hasExploitDb: { type: Boolean, default: false },
     totalVulnerabilities: { type: Number, default: 0 },
     fixedVersion: { type: String, default: null }, // Khuyến nghị phiên bản an toàn
     vulnerabilities: [vulnerabilityDetailSchema]
@@ -63,18 +86,20 @@ const scanSchema = new mongoose.Schema(
       totalPackages: { type: Number, default: 0 },
       vulnerablePackages: { type: Number, default: 0 },
       safePackages: { type: Number, default: 0 },
+      errorPackages: { type: Number, default: 0 },
+      hasScanErrors: { type: Boolean, default: false },
       cisaKevCount: { type: Number, default: 0 },
       riskScore: { type: Number, default: 0 }, // 0 - 100
       riskLevel: {
         type: String,
-        enum: ['SAFE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+        enum: ['SAFE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'INCONCLUSIVE'],
         default: 'SAFE'
       }
     },
     results: [packageResultSchema],
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed'],
+      enum: ['pending', 'completed', 'partial', 'failed'],
       default: 'completed'
     }
   },

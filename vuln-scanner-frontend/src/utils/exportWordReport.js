@@ -238,19 +238,36 @@ export async function generateWordReport(scanData) {
   );
 
   if (vulnerablePackages.length === 0) {
-    docChildren.push(
-      new Paragraph({
-        spacing: { after: 200 },
-        children: [
-          new TextRun({
-            text: '✓ Không phát hiện bất kỳ lỗ hổng bảo mật nào trong các thư viện phụ thuộc của dự án này.',
-            bold: true,
-            color: '16A34A',
-            font: FONT_NAME
-          })
-        ]
-      })
-    );
+    const errorCount = summary.errorPackages || results.filter((p) => p.hasScanError).length;
+    if (errorCount > 0) {
+      docChildren.push(
+        new Paragraph({
+          spacing: { after: 200 },
+          children: [
+            new TextRun({
+              text: `⚠️ Cảnh báo phạm vi dữ liệu (AUD-01): Có ${errorCount} gói thư viện gặp sự cố kết nối tới nguồn Google OSV. Trong phạm vi các gói đã xác minh thành công (${summary.safePackages ?? (results.length - errorCount)} gói), không phát hiện lỗ hổng. Chưa thể kết luận an toàn tuyệt đối cho toàn bộ dự án.`,
+              bold: true,
+              color: 'B45309',
+              font: FONT_NAME
+            })
+          ]
+        })
+      );
+    } else {
+      docChildren.push(
+        new Paragraph({
+          spacing: { after: 200 },
+          children: [
+            new TextRun({
+              text: '✓ Không phát hiện bất kỳ lỗ hổng bảo mật nào trong các thư viện phụ thuộc của dự án này.',
+              bold: true,
+              color: '16A34A',
+              font: FONT_NAME
+            })
+          ]
+        })
+      );
+    }
   } else {
     const summaryTableRows = [
       new TableRow({
