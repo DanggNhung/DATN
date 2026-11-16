@@ -122,11 +122,11 @@ export default function Scanner({ onScanSuccess, stats }) {
           <ShieldCheck size={14} /> DevSecOps Supply Chain Security Engine
         </div>
         <h1 style={{
-          fontSize: 34,
+          fontSize: 'clamp(24px, 5vw, 34px)',
           fontWeight: 900,
           letterSpacing: '-0.02em',
           marginBottom: 12,
-          lineHeight: 1.2,
+          lineHeight: 1.25,
           fontFamily: 'var(--font-heading)'
         }}>
           Kiểm Thử Lỗ Hổng Chuỗi Cung Ứng & Cảnh Báo <span style={{
@@ -144,15 +144,17 @@ export default function Scanner({ onScanSuccess, stats }) {
           <div style={{
             display: 'flex',
             justifyContent: 'center',
-            gap: 24,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px 18px',
             marginTop: 20,
             fontSize: 13,
             color: 'var(--text-dim)'
           }}>
             <div>Tổng lượt quét: <strong style={{ color: 'var(--text-main)' }}>{stats.totalScans}</strong></div>
-            <div>•</div>
+            <div style={{ display: 'none' }}>•</div>
             <div>Thư viện đã phân tích: <strong style={{ color: 'var(--text-main)' }}>{stats.totalPackagesScanned}</strong></div>
-            <div>•</div>
+            <div style={{ display: 'none' }}>•</div>
             <div>Kho dữ liệu CISA KEV: <strong style={{ color: '#f87171' }}>1,700+ CVEs</strong></div>
           </div>
         )}
@@ -165,11 +167,13 @@ export default function Scanner({ onScanSuccess, stats }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
           borderBottom: '1px solid var(--border-subtle)',
           paddingBottom: 16,
           marginBottom: 24
         }}>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
               onClick={() => setActiveMode('upload')}
               style={{

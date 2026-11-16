@@ -67,6 +67,8 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
         background: '#1e293b',
         padding: '12px 20px',
         borderRadius: 10,
@@ -80,7 +82,7 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button
             onClick={handleDownloadWord}
             disabled={isExporting}
@@ -121,7 +123,7 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
           background: '#ffffff',
           color: '#1e293b',
           borderRadius: 8,
-          padding: '40px 48px',
+          padding: 'clamp(16px, 4vw, 48px)',
           boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
           fontFamily: "'Times New Roman', Times, serif",
           fontSize: '15px',
@@ -314,52 +316,54 @@ export default function AuditReportModal({ isOpen, onClose, scanData }) {
               </div>
             )
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left', fontFamily: "'Times New Roman', Times, serif" }}>
-              <thead>
-                <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
-                  <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>STT</th>
-                  <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>THƯ VIỆN</th>
-                  <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>PHIÊN BẢN</th>
-                  <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>SỐ LỖ HỔNG</th>
-                  <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>CISA KEV</th>
-                  <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>BẢN VÁ KHUYẾN NGHỊ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vulnerablePackages.map((pkg, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: '#fffafa' }}>
-                    <td style={{ padding: '8px 10px', color: '#475569' }}>{i + 1}</td>
-                    <td style={{ padding: '8px 10px', fontWeight: 700 }}>
-                      {pkg.package}
-                    </td>
-                    <td style={{ padding: '8px 10px' }}>
-                      v{pkg.version}
-                    </td>
-                    <td style={{ padding: '8px 10px' }}>
-                      <span style={{ color: '#b91c1c', fontWeight: 700 }}>
-                        {pkg.totalVulnerabilities || pkg.vulnerabilities?.length || 0} CVEs
-                      </span>
-                    </td>
-                    <td style={{ padding: '8px 10px' }}>
-                      {pkg.hasCisaKev ? (
-                        <span style={{ color: '#dc2626', fontWeight: 700 }}>⚠️ CISA KEV</span>
-                      ) : (
-                        <span style={{ color: '#475569' }}>Không</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '8px 10px' }}>
-                      {pkg.fixedVersion ? (
-                        <strong style={{ color: '#0284c7' }}>
-                          Nâng lên &gt;= {pkg.fixedVersion}
-                        </strong>
-                      ) : (
-                        <span style={{ color: '#d97706' }}>Chưa có bản vá</span>
-                      )}
-                    </td>
+            <div className="table-responsive">
+              <table style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 13, textAlign: 'left', fontFamily: "'Times New Roman', Times, serif" }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
+                    <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>STT</th>
+                    <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>THƯ VIỆN</th>
+                    <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>PHIÊN BẢN</th>
+                    <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>SỐ LỖ HỔNG</th>
+                    <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>CISA KEV</th>
+                    <th style={{ padding: '8px 10px', color: '#1e293b', fontWeight: 700 }}>BẢN VÁ KHUYẾN NGHỊ</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {vulnerablePackages.map((pkg, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: '#fffafa' }}>
+                      <td style={{ padding: '8px 10px', color: '#475569' }}>{i + 1}</td>
+                      <td style={{ padding: '8px 10px', fontWeight: 700 }}>
+                        {pkg.package}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        v{pkg.version}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{ color: '#b91c1c', fontWeight: 700 }}>
+                          {pkg.totalVulnerabilities || pkg.vulnerabilities?.length || 0} CVEs
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {pkg.hasCisaKev ? (
+                          <span style={{ color: '#dc2626', fontWeight: 700 }}>⚠️ CISA KEV</span>
+                        ) : (
+                          <span style={{ color: '#475569' }}>Không</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {pkg.fixedVersion ? (
+                          <strong style={{ color: '#0284c7' }}>
+                            Nâng lên &gt;= {pkg.fixedVersion}
+                          </strong>
+                        ) : (
+                          <span style={{ color: '#d97706' }}>Chưa có bản vá</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 

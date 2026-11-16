@@ -10,11 +10,14 @@ import {
   Bug,
   ChevronDown,
   Layers,
-  Check
+  Check,
+  Menu,
+  X
 } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab, user, onOpenAuth, onLogout }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Đóng dropdown khi nhấn chuột ra ngoài
@@ -106,7 +109,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onOpenAuth, onLo
               gap: 8 
             }}>
               <span>SECSHIELD</span>
-              <span style={{ 
+              <span className="brand-subtitle" style={{ 
                 fontSize: 10, 
                 fontWeight: 600,
                 background: '#fdf2f8', 
@@ -121,8 +124,8 @@ export default function Navbar({ activeTab, setActiveTab, user, onOpenAuth, onLo
             </div>
           </div>
 
-          {/* Navigation - Tính năng dạng Dropdown List & Tab Lịch sử */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Navigation - Desktop */}
+          <nav className="desktop-nav">
             {/* Dropdown danh sách tính năng */}
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button
@@ -281,8 +284,8 @@ export default function Navbar({ activeTab, setActiveTab, user, onOpenAuth, onLo
             )}
           </nav>
 
-          {/* User Account Section - Sát góc trên bên phải, viết liền 1 dòng trong 1 khung */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {/* User Account Section - Desktop */}
+          <div className="desktop-user-section">
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {/* Khung chứa user và lập trình viên viết liền 1 dòng */}
@@ -332,7 +335,126 @@ export default function Navbar({ activeTab, setActiveTab, user, onOpenAuth, onLo
               </button>
             )}
           </div>
+
+          {/* Mobile Menu Toggle Button */}
+          <button
+            type="button"
+            className="mobile-menu-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="mobile-nav-drawer">
+            {/* User status on mobile */}
+            {user ? (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 12px',
+                borderRadius: 8,
+                background: '#fdf2f8',
+                border: '1px solid #fbcfe8',
+                marginBottom: 8
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{user.username}</div>
+                  <div style={{ fontSize: 11, color: user.role === 'admin' ? '#9333ea' : '#db2777', fontWeight: 600 }}>
+                    {user.role === 'admin' ? '⚡ Quản trị viên' : 'Lập trình viên'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    onLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="btn-secondary"
+                  style={{ padding: '5px 10px', fontSize: 12 }}
+                >
+                  <LogOut size={13} />
+                  <span>Thoát</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  onOpenAuth();
+                  setMobileMenuOpen(false);
+                }}
+                className="btn-primary"
+                style={{ width: '100%', justifyContent: 'center', marginBottom: 10, padding: '10px' }}
+              >
+                <LogIn size={15} />
+                <span>Đăng Nhập / Đăng Ký</span>
+              </button>
+            )}
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', padding: '4px 6px', letterSpacing: '0.04em' }}>
+              Tính năng bảo mật
+            </div>
+
+            {featureItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {item.icon}
+                    <span>{item.title}</span>
+                  </div>
+                  {isActive && <Check size={15} color="#db2777" style={{ marginLeft: 'auto' }} />}
+                </button>
+              );
+            })}
+
+            <div style={{ height: 1, background: '#fce7f3', margin: '6px 0' }} />
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('history');
+                setMobileMenuOpen(false);
+              }}
+              className={`mobile-nav-item ${activeTab === 'history' ? 'active' : ''}`}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <History size={16} />
+                <span>Lịch Sử Quét</span>
+              </div>
+              {activeTab === 'history' && <Check size={15} color="#db2777" style={{ marginLeft: 'auto' }} />}
+            </button>
+
+            {user && user.role === 'admin' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('admin');
+                  setMobileMenuOpen(false);
+                }}
+                className={`mobile-nav-item ${activeTab === 'admin' ? 'active' : ''}`}
+                style={{ color: '#9333ea' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Users size={16} />
+                  <span>Quản Trị Admin</span>
+                </div>
+                {activeTab === 'admin' && <Check size={15} color="#9333ea" style={{ marginLeft: 'auto' }} />}
+              </button>
+            )}
+          </div>
+        )}
       </header>
     </>
   );

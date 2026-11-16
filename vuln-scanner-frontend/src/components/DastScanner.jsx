@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Zap, Globe, ShieldAlert, AlertTriangle, CheckCircle, RefreshCw, 
-  ArrowRight, ArrowLeft, ExternalLink, ShieldCheck, Flame, Wrench, Bug, Play 
+import {
+  Zap, Globe, ShieldAlert, AlertTriangle, CheckCircle, RefreshCw,
+  ArrowRight, ArrowLeft, ExternalLink, ShieldCheck, Flame, Wrench, Bug, Play
 } from 'lucide-react';
 import { dastAPI } from '../services/api';
 
@@ -150,12 +150,12 @@ export default function DastScanner() {
       {!scanResult ? (
         <div className="glass-card" style={{ padding: 28 }}>
           <form onSubmit={runDastScan}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
               <label style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>
                 Địa Chỉ URL Endpoint Cần Kiểm Thử (Target URL)
               </label>
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={handleDemoLocal}
@@ -387,9 +387,8 @@ export default function DastScanner() {
                 className="glass-card"
                 style={{
                   padding: 20,
-                  borderLeft: `4px solid ${
-                    alert.risk === 'High' ? '#ef4444' : alert.risk === 'Medium' ? '#f59e0b' : '#3b82f6'
-                  }`
+                  borderLeft: `4px solid ${alert.risk === 'High' ? '#ef4444' : alert.risk === 'Medium' ? '#f59e0b' : '#3b82f6'
+                    }`
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>

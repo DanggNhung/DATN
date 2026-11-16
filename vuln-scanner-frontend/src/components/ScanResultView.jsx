@@ -85,13 +85,13 @@ export default function ScanResultView({ scanData, onBack }) {
   return (
     <div style={{ maxWidth: 1050, margin: '0 auto', padding: '30px 20px' }}>
       {/* Top Bar with Back and Export */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} className="btn-secondary" style={{ padding: '8px 14px', fontSize: 13 }}>
           <ArrowLeft size={16} />
           <span>Quay Lại Quét Tệp Khác</span>
         </button>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button 
             onClick={handleExportWord} 
             disabled={isExportingWord}
@@ -297,7 +297,7 @@ export default function ScanResultView({ scanData, onBack }) {
         marginBottom: 18
       }}>
         {/* Search */}
-        <div style={{ position: 'relative', width: 300 }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: 300, minWidth: 220 }}>
           <Search size={16} color="var(--text-dim)" style={{ position: 'absolute', left: 12, top: 11 }} />
           <input
             type="text"
@@ -318,7 +318,7 @@ export default function ScanResultView({ scanData, onBack }) {
         </div>
 
         {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             onClick={() => setFilterType('all')}
             style={{

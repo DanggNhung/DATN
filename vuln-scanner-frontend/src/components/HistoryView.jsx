@@ -102,8 +102,8 @@ export default function HistoryView({ user, onViewScan, onOpenAuth }) {
           <div style={{ fontSize: 13, marginTop: 4 }}>Hãy tải lên tệp đầu tiên để kiểm thử bảo mật!</div>
         </div>
       ) : (
-        <div className="glass-card" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+        <div className="glass-card table-responsive" style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 700, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.02)' }}>
                 <th style={{ padding: '14px 18px', color: 'var(--text-dim)', fontWeight: 600 }}>DỰ ÁN</th>

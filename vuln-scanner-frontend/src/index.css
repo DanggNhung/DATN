@@ -317,6 +317,171 @@ input::placeholder, textarea::placeholder {
   padding: 20px;
 }
 
+/* ==========================================================================
+   RESPONSIVE & MOBILE OPTIMIZATIONS
+   ========================================================================== */
+
+/* Responsive Table Container */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+}
+
+/* Desktop vs Mobile Nav Toggles */
+.desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-user-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mobile-menu-btn {
+  display: none;
+  background: #ffffff;
+  border: 1px solid #fbcfe8;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #db2777;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-btn:hover {
+  background: #fdf2f8;
+  border-color: #f472b6;
+}
+
+.mobile-nav-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #ffffff;
+  border-top: 1px solid #fce7f3;
+  padding: 14px 18px 20px;
+  box-shadow: 0 12px 24px rgba(236, 72, 153, 0.1);
+  animation: slide-down 0.22s ease-out;
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.mobile-nav-item:hover, .mobile-nav-item.active {
+  background: #fdf2f8;
+  color: #db2777;
+  border-color: #fbcfe8;
+}
+
+/* Tablet & Mobile Breakpoints */
+@media screen and (max-width: 920px) {
+  .desktop-nav {
+    display: none !important;
+  }
+
+  .desktop-user-section {
+    display: none !important;
+  }
+
+  .mobile-menu-btn {
+    display: inline-flex !important;
+  }
+
+  .announcement-bar {
+    font-size: 10.5px;
+    padding: 6px 10px;
+    letter-spacing: 0.02em;
+    gap: 6px;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+
+  .glass-card {
+    padding: 18px 14px !important;
+    border-radius: 10px;
+  }
+
+  /* Responsive Headers */
+  h1 {
+    font-size: 24px !important;
+    line-height: 1.25 !important;
+  }
+
+  h2 {
+    font-size: 20px !important;
+  }
+
+  /* Responsive Action Buttons */
+  .btn-primary, .btn-secondary, .btn-danger {
+    padding: 8px 14px;
+    font-size: 12.5px;
+  }
+
+  /* Responsive Modal */
+  .modal-overlay {
+    padding: 12px !important;
+  }
+
+  /* Compact Brand subtitle */
+  .brand-subtitle {
+    display: none !important;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .announcement-bar span:nth-child(2),
+  .announcement-bar span:nth-child(3) {
+    display: none !important;
+  }
+
+  .announcement-bar {
+    font-size: 10px;
+    padding: 5px 8px;
+  }
+
+  h1 {
+    font-size: 21px !important;
+  }
+}
+
 /* Print Rules for Official PDF Audit Report */
 @media print {
   body {
