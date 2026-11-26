@@ -80,8 +80,11 @@ export default function DastScanner({ user, onOpenAuth }) {
       });
       clearInterval(stepTimer);
       setIsScanning(false);
-      if (res.data?.requiresAuth) {
-        setPendingDastScan(res.data);
+      if (res.data?.requiresAuth || !user) {
+        setPendingDastScan({
+          ...res.data,
+          requiresAuth: true
+        });
       } else {
         setPendingDastScan(null);
         setScanResult(res.data);

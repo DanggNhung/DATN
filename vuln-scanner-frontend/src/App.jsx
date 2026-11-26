@@ -54,8 +54,11 @@ export default function App() {
   };
 
   const handleScanSuccess = (scanData) => {
-    if (scanData?.requiresAuth) {
-      setPendingScan(scanData);
+    if (scanData?.requiresAuth || !user) {
+      setPendingScan({
+        ...scanData,
+        requiresAuth: true
+      });
       setCurrentScan(null);
     } else {
       setPendingScan(null);
@@ -110,7 +113,7 @@ export default function App() {
       {/* Main Content Area */}
       <main style={{ flex: 1, paddingBottom: 60 }}>
         {activeTab === 'scanner' && (
-          currentScan ? (
+          currentScan && user ? (
             <ScanResultView
               scanData={currentScan}
               onBack={() => setCurrentScan(null)}
