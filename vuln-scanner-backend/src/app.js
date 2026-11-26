@@ -17,6 +17,9 @@ const exploitDbRoutes = require('./routes/exploitdb.route');
 
 const app = express();
 
+// Ẩn header X-Powered-By: Express để tránh lộ ngăn xếp công nghệ (CWE-200)
+app.disable('x-powered-by');
+
 // Khởi tạo kết nối MongoDB
 connectDB().then(() => {
   // Sau khi kết nối DB, nạp dữ liệu CISA KEV & Exploit-DB
@@ -30,8 +33,42 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Middleware
-app.use(cors());
+// Security Headers Middleware (CSP, X-Content-Type-Options, X-Frame-Options, HSTS)
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none';");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.removeHeader('X-Powered-By');
+  next();
+});
+
+// Cấu hình CORS Whitelist (tránh sử dụng Access-Control-Allow-Origin: * - CWE-942)
+const envOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Cho phép request không có Origin (Postman, curl, VS Code Extension, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+      const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+      const isWhitelisted = envOrigins.includes(origin);
+
+      if (isWhitelisted || isLocalhost || isVercelPreview) {
+        return callback(null, true);
+      }
+      return callback(new Error('Origin không nằm trong danh sách CORS cho phép'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
+  })
+);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

@@ -24,6 +24,8 @@ const packageResultSchema = new mongoose.Schema(
   {
     package: { type: String, required: true },
     version: { type: String, required: true },
+    versionRange: { type: String, default: null },
+    isVersionRange: { type: Boolean, default: false },
     ecosystem: { type: String, required: true },
     isVulnerable: { type: Boolean, default: false },
     isSafe: { type: Boolean, default: false },

@@ -98,6 +98,17 @@ exports.getDastById = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Không tìm thấy kết quả kiểm thử DAST' });
     }
 
+    // Kiểm tra quyền truy cập: Chặn khách và người dùng khác khi dữ liệu có chủ sở hữu
+    if (scan.userId) {
+      const ownerId = (scan.userId._id || scan.userId).toString();
+      const isOwner = req.user && req.user._id && req.user._id.toString() === ownerId;
+      const isAdmin = req.user && req.user.role === 'admin';
+
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
+      }
+    }
+
     return res.json({
       success: true,
       data: scan

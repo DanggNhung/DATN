@@ -309,21 +309,108 @@ class DastService {
   }
 
   /**
+   * Chuẩn hóa mức độ rủi ro từ OWASP ZAP về chuẩn schema DastScan
+   */
+  static normalizeZapRisk(risk) {
+    const val = (risk || '').toLowerCase();
+    if (val === 'high') return 'High';
+    if (val === 'medium') return 'Medium';
+    if (val === 'low') return 'Low';
+    return 'Informational';
+  }
+
+  /**
+   * Thực thi quét DAST thực sự qua OWASP ZAP REST API (Spider -> Active Scan -> Alerts)
+   */
+  static async runZapDastAssessment(targetUrl) {
+    const startTime = Date.now();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = 'http://' + targetUrl;
+    }
+
+    const zapClient = axios.create({
+      baseURL: this.ZAP_HOST,
+      timeout: 10000,
+      headers: this.ZAP_API_KEY ? { 'X-ZAP-API-Key': this.ZAP_API_KEY } : {}
+    });
+
+    // 1. Chạy ZAP Spider để thu thập các endpoint
+    const spiderRes = await zapClient.get('/JSON/spider/action/scan/', {
+      params: { url: targetUrl, maxChildren: 10, recurse: true }
+    });
+    const spiderScanId = spiderRes.data?.scan;
+    if (spiderScanId === undefined || spiderScanId === null) {
+      throw new Error('OWASP ZAP không trả về scanId cho Spider');
+    }
+
+    const spiderDeadline = Date.now() + 30000;
+    while (Date.now() < spiderDeadline) {
+      const statusRes = await zapClient.get('/JSON/spider/view/status/', {
+        params: { scanId: spiderScanId }
+      });
+      if (parseInt(statusRes.data?.status, 10) >= 100) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    // 2. Chạy ZAP Active Scan
+    const ascanRes = await zapClient.get('/JSON/ascan/action/scan/', {
+      params: { url: targetUrl, recurse: true }
+    });
+    const ascanId = ascanRes.data?.scan;
+    if (ascanId === undefined || ascanId === null) {
+      throw new Error('OWASP ZAP không trả về scanId cho Active Scan');
+    }
+
+    const ascanDeadline = Date.now() + 45000;
+    while (Date.now() < ascanDeadline) {
+      const statusRes = await zapClient.get('/JSON/ascan/view/status/', {
+        params: { scanId: ascanId }
+      });
+      if (parseInt(statusRes.data?.status, 10) >= 100) break;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+
+    // 3. Thu thập kết quả Alerts từ OWASP ZAP
+    const alertsRes = await zapClient.get('/JSON/core/view/alerts/', {
+      params: { baseurl: targetUrl, start: 0, count: 100 }
+    });
+    const rawAlerts = Array.isArray(alertsRes.data?.alerts) ? alertsRes.data.alerts : [];
+
+    const alerts = rawAlerts.map((a) => ({
+      name: a.alert || a.name || 'ZAP Security Alert',
+      risk: this.normalizeZapRisk(a.risk),
+      confidence: a.confidence || 'Medium',
+      cweId: a.cweid ? `CWE-${a.cweid}` : '',
+      description: a.description || '',
+      solution: a.solution || '',
+      url: a.url || targetUrl,
+      method: a.method || 'GET',
+      parameter: a.param || '',
+      evidence: a.evidence || '',
+      reference: a.reference || ''
+    }));
+
+    const durationSeconds = Math.round((Date.now() - startTime) / 1000);
+    const summary = this.calculateSummary(alerts);
+
+    return {
+      engineUsed: 'OWASP_ZAP_API',
+      summary,
+      alerts,
+      durationSeconds
+    };
+  }
+
+  /**
    * Tiến hành quét DAST: Tự động dùng OWASP ZAP API nếu có, hoặc dùng Built-in DAST Engine
    */
   static async scanEndpoint(targetUrl) {
     const zapStatus = await this.checkZapStatus();
 
     if (zapStatus.isAvailable) {
-      // Nếu có ZAP, có thể gọi ZAP API
       try {
         console.log(`[+] Đang kích hoạt OWASP ZAP API quét: ${targetUrl}`);
-        // Chạy baseline audit kết hợp ZAP
-        const baselineResult = await this.runBuiltinDastAssessment(targetUrl);
-        return {
-          ...baselineResult,
-          engineUsed: 'OWASP_ZAP_API'
-        };
+        return await this.runZapDastAssessment(targetUrl);
       } catch (e) {
         console.warn('[-] Lỗi gọi ZAP, chuyển sang Built-in DAST Engine:', e.message);
       }

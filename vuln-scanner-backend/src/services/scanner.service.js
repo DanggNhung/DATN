@@ -5,7 +5,51 @@ const ExploitDbService = require('./exploitdb.service');
 
 class ScannerService {
   /**
-   * Trích xuất phiên bản đã vá lỗi (Fixed Version) từ cấu trúc affected của OSV
+   * So sánh 2 chuỗi phiên bản theo SemVer/PEP440 (trả về >0 nếu a > b, <0 nếu a < b, 0 nếu bằng)
+   */
+  static compareVersions(a, b) {
+    const normalize = (v) => String(v || '').trim().replace(/^v(?=\d)/i, '');
+    const va = normalize(a);
+    const vb = normalize(b);
+    if (va === vb) return 0;
+
+    const [mainA, preA] = va.split('-', 2);
+    const [mainB, preB] = vb.split('-', 2);
+
+    const partsA = mainA.split('.').map((p) => (/^\d+$/.test(p) ? parseInt(p, 10) : p));
+    const partsB = mainB.split('.').map((p) => (/^\d+$/.test(p) ? parseInt(p, 10) : p));
+    const len = Math.max(partsA.length, partsB.length);
+
+    for (let i = 0; i < len; i++) {
+      const pa = partsA[i] !== undefined ? partsA[i] : 0;
+      const pb = partsB[i] !== undefined ? partsB[i] : 0;
+      if (typeof pa === 'number' && typeof pb === 'number') {
+        if (pa !== pb) return pa - pb;
+      } else {
+        const sa = String(pa);
+        const sb = String(pb);
+        if (sa !== sb) return sa.localeCompare(sb);
+      }
+    }
+
+    // Phiên bản chính thức (không có pre-release) cao hơn pre-release
+    if (!preA && preB) return 1;
+    if (preA && !preB) return -1;
+    if (preA && preB) return preA.localeCompare(preB);
+    return 0;
+  }
+
+  /**
+   * Chọn phiên bản cao nhất từ mảng các phiên bản (không phụ thuộc thứ tự mảng)
+   */
+  static pickHighestVersion(versions) {
+    const valid = (versions || []).filter(Boolean);
+    if (valid.length === 0) return null;
+    return valid.reduce((best, curr) => (this.compareVersions(curr, best) > 0 ? curr : best), valid[0]);
+  }
+
+  /**
+   * Trích xuất phiên bản đã vá lỗi (Fixed Version) cao nhất từ cấu trúc affected của OSV
    */
   static extractFixedVersion(affectedList) {
     if (!affectedList || !Array.isArray(affectedList)) return null;
@@ -25,14 +69,99 @@ class ScannerService {
       }
     }
 
-    if (fixedVersions.length === 0) return null;
-    // Trả về phiên bản vá cao nhất/mới nhất tìm thấy
-    return fixedVersions[fixedVersions.length - 1];
+    return this.pickHighestVersion(fixedVersions);
+  }
+
+  /**
+   * Tính điểm CVSS Base Score chuẩn từ chuỗi vector CVSS v3.0 / v3.1 hoặc CVSS v2.0
+   */
+  static calculateCvssBaseScore(vectorStr) {
+    if (typeof vectorStr !== 'string') return null;
+    const vector = vectorStr.trim().toUpperCase();
+
+    // CVSS v3.0 / v3.1
+    if (vector.startsWith('CVSS:3.0/') || vector.startsWith('CVSS:3.1/')) {
+      const metrics = {};
+      for (const part of vector.split('/').slice(1)) {
+        const [k, v] = part.split(':');
+        if (k && v) metrics[k] = v;
+      }
+
+      const avMap = { N: 0.85, A: 0.62, L: 0.55, P: 0.2 };
+      const acMap = { L: 0.77, H: 0.44 };
+      const uiMap = { N: 0.85, R: 0.62 };
+      const ciaMap = { H: 0.56, L: 0.22, N: 0.0 };
+      const prUnchanged = { N: 0.85, L: 0.62, H: 0.27 };
+      const prChanged = { N: 0.85, L: 0.68, H: 0.5 };
+
+      const av = avMap[metrics.AV];
+      const ac = acMap[metrics.AC];
+      const scope = metrics.S;
+      const pr = scope === 'C' ? prChanged[metrics.PR] : scope === 'U' ? prUnchanged[metrics.PR] : undefined;
+      const ui = uiMap[metrics.UI];
+      const c = ciaMap[metrics.C];
+      const i = ciaMap[metrics.I];
+      const a = ciaMap[metrics.A];
+
+      if ([av, ac, pr, ui, c, i, a].some((x) => x === undefined)) {
+        return null;
+      }
+
+      const iss = 1 - (1 - c) * (1 - i) * (1 - a);
+      if (iss <= 0) return 0;
+
+      const impact = scope === 'C'
+        ? 7.52 * (iss - 0.029) - 3.25 * Math.pow(iss - 0.02, 15)
+        : 6.42 * iss;
+      if (impact <= 0) return 0;
+
+      const exploitability = 8.22 * av * ac * pr * ui;
+      const rawScore = scope === 'C'
+        ? Math.min(1.08 * (impact + exploitability), 10)
+        : Math.min(impact + exploitability, 10);
+
+      // Roundup theo chuẩn FIRST.org (tránh sai số dấu phẩy động)
+      return Math.ceil(Math.round(rawScore * 100000) / 10000) / 10;
+    }
+
+    // CVSS v2.0
+    if (vector.startsWith('AV:') || vector.startsWith('CVSS:2.0/')) {
+      const clean = vector.replace(/^CVSS:2\.0\//, '');
+      const metrics = {};
+      for (const part of clean.split('/')) {
+        const [k, v] = part.split(':');
+        if (k && v) metrics[k] = v;
+      }
+
+      const avMap = { L: 0.395, A: 0.646, N: 1.0 };
+      const acMap = { H: 0.35, M: 0.61, L: 0.71 };
+      const auMap = { M: 0.45, S: 0.56, N: 0.704 };
+      const ciaMap = { N: 0.0, P: 0.275, C: 0.66 };
+
+      const av = avMap[metrics.AV];
+      const ac = acMap[metrics.AC];
+      const au = auMap[metrics.AU];
+      const c = ciaMap[metrics.C];
+      const i = ciaMap[metrics.I];
+      const a = ciaMap[metrics.A];
+
+      if ([av, ac, au, c, i, a].some((x) => x === undefined)) {
+        return null;
+      }
+
+      const impact = 10.41 * (1 - (1 - c) * (1 - i) * (1 - a));
+      const exploitability = 20 * av * ac * au;
+      const fImpact = impact === 0 ? 0 : 1.176;
+      const baseScore = (0.6 * impact + 0.4 * exploitability - 1.5) * fImpact;
+      return Math.max(0, Math.round(baseScore * 10) / 10);
+    }
+
+    return null;
   }
 
   /**
    * Chuẩn hóa mức độ nghiêm trọng (Severity)
-   * AUD-02: Nhận diện chính xác string severity, CVSS numeric score, database_specific và vector CVSS
+   * AUD-02: Nhận diện chính xác string severity, CVSS numeric score, database_specific và tính điểm chuẩn từ vector CVSS
    */
   static normalizeSeverity(vuln) {
     if (!vuln) return 'UNKNOWN';
@@ -73,18 +202,15 @@ class ScannerService {
           return 'LOW';
         }
 
-        if (typeof item.score === 'string' && item.score.startsWith('CVSS:')) {
-          const vector = item.score.toUpperCase();
-          if (vector.includes('/C:H/I:H/A:H') && (vector.includes('/AV:N') || vector.includes('/AC:L'))) {
-            return 'CRITICAL';
+        if (typeof item.score === 'string') {
+          const calculatedScore = this.calculateCvssBaseScore(item.score);
+          if (calculatedScore !== null) {
+            if (calculatedScore >= 9.0) return 'CRITICAL';
+            if (calculatedScore >= 7.0) return 'HIGH';
+            if (calculatedScore >= 4.0) return 'MEDIUM';
+            if (calculatedScore > 0) return 'LOW';
+            return 'UNKNOWN';
           }
-          if (vector.includes('/C:H') || vector.includes('/I:H') || vector.includes('/A:H')) {
-            return 'HIGH';
-          }
-          if (vector.includes('/C:L') || vector.includes('/I:L') || vector.includes('/A:L')) {
-            return 'MEDIUM';
-          }
-          return 'HIGH';
         }
       }
     }
@@ -191,12 +317,12 @@ class ScannerService {
     const finalVulns = parsedVulns.map((v) => {
       let isCisaKev = false;
       let cisaKevDetails = null;
-      const exploitDbList = [];
+      const exploitDbMap = new Map();
 
       for (const cve of v.candidateCves) {
         const upperCve = cve.toUpperCase();
 
-        if (cisaMap.has(upperCve)) {
+        if (!isCisaKev && cisaMap.has(upperCve)) {
           isCisaKev = true;
           const cisaRecord = cisaMap.get(upperCve);
           cisaKevDetails = {
@@ -211,7 +337,12 @@ class ScannerService {
         try {
           const edbMatches = ExploitDbService.findExploitsByCve(upperCve);
           if (edbMatches && edbMatches.length > 0) {
-            exploitDbList.push(...edbMatches);
+            for (const edb of edbMatches) {
+              const edbKey = edb.edbId || edb.id || edb.url || JSON.stringify(edb);
+              if (!exploitDbMap.has(edbKey)) {
+                exploitDbMap.set(edbKey, edb);
+              }
+            }
           }
         } catch (edbErr) {
           exploitDbStatus = 'error';
@@ -219,6 +350,7 @@ class ScannerService {
         }
       }
 
+      const exploitDbList = Array.from(exploitDbMap.values());
       const { candidateCves, ...finalVuln } = v;
       return {
         ...finalVuln,
@@ -260,15 +392,17 @@ class ScannerService {
         const hasCisaKev = vulnerabilities.some((v) => v.isCisaKev);
         const hasExploitDb = vulnerabilities.some((v) => v.hasExploitDb);
 
-        // Tìm phiên bản vá lỗi được gợi ý (nếu có)
+        // Tìm phiên bản vá lỗi cao nhất được gợi ý (nếu có)
         const fixedVersions = vulnerabilities
           .map((v) => v.fixed)
           .filter(Boolean);
-        const recommendedFixedVersion = fixedVersions.length > 0 ? fixedVersions[fixedVersions.length - 1] : null;
+        const recommendedFixedVersion = this.pickHighestVersion(fixedVersions);
 
         return {
           package: pkg.name,
           version: pkg.version,
+          versionRange: pkg.versionRange || null,
+          isVersionRange: Boolean(pkg.isVersionRange),
           ecosystem: pkg.ecosystem,
           scanStatus: queryRes.status, // 'scanned' | 'error' | 'partial'
           scanError: queryRes.errorMessage,
@@ -322,12 +456,12 @@ class ScannerService {
         const countToAdd = Math.max(declaredTotal, itemVulns.length);
         totalVulns += countToAdd;
 
-        // Nếu có danh sách chi tiết các lỗ hổng
+        // Thống kê nhất quán ở cấp độ lỗ hổng (mỗi lỗ hổng chỉ cộng tối đa 1 KEV / 1 PoC)
         for (const v of itemVulns) {
           if (!v) continue;
           if (v.isCisaKev) cisaKevCount++;
-          if (v.hasExploitDb) {
-            exploitDbCount += (Array.isArray(v.exploitDbList) && v.exploitDbList.length > 0) ? v.exploitDbList.length : 1;
+          if (v.hasExploitDb || (Array.isArray(v.exploitDbList) && v.exploitDbList.length > 0)) {
+            exploitDbCount++;
           }
           const sev = (v.severity || '').toUpperCase().trim();
           if (sev === 'CRITICAL') criticalCount++;

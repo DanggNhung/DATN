@@ -280,9 +280,15 @@ exports.getScanById = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Không tìm thấy kết quả quét' });
     }
 
-    // Nếu bài quét thuộc về user khác và người gọi không phải admin
-    if (scan.userId && req.user && req.user.role !== 'admin' && scan.userId._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
+    // Kiểm tra quyền truy cập (AUD: Quyền đọc chi tiết scan SCA phải chặn khách khi dữ liệu có chủ sở hữu)
+    if (scan.userId) {
+      const ownerId = (scan.userId._id || scan.userId).toString();
+      const isOwner = req.user && req.user._id && req.user._id.toString() === ownerId;
+      const isAdmin = req.user && req.user.role === 'admin';
+
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
+      }
     }
 
     scan.projectName = decodeUtf8Safe(scan.projectName);

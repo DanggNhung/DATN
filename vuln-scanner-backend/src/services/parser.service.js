@@ -3,6 +3,61 @@ const AdmZip = require('adm-zip');
 
 class ParserService {
   /**
+   * Chuẩn hóa và trích xuất phiên bản đại diện (cận dưới) từ chuỗi khai báo npm mà vẫn giữ nguyên ngữ nghĩa khoảng phiên bản
+   */
+  static parseNpmVersionSpec(versionRaw) {
+    const raw = versionRaw.trim();
+    if (!raw) return { version: '', versionRange: raw, isVersionRange: false, isSkippable: true };
+
+    // Các tham chiếu không phải semver registry (git, file, url, workspace, tag như latest/*)
+    if (/^(git\+|https?:|file:|link:|workspace:|npm:)/i.test(raw) || /^(\*|latest|next|canary|beta|alpha)$/i.test(raw)) {
+      return { version: raw, versionRange: raw, isVersionRange: true, isSkippable: true };
+    }
+
+    // Nếu có toán tử OR (||), tách nhánh đầu tiên để lấy cận dưới
+    const firstBranch = raw.split('||')[0].trim();
+
+    // Phát hiện có phải khoảng phiên bản (range) hay không
+    const isRange = /[\^~><=*xX]|\s-\s|\|\|/.test(raw);
+
+    // Xử lý khoảng gạch nối: "1.2.3 - 2.0.0" -> lấy cận dưới "1.2.3"
+    let candidate = firstBranch;
+    if (/\s+-\s+/.test(candidate)) {
+      candidate = candidate.split(/\s+-\s+/)[0].trim();
+    }
+
+    // Xử lý chuỗi nhiều điều kiện: ">=1.2.0 <2.0.0" -> lấy token đầu tiên có số phiên bản
+    const tokens = candidate.split(/\s+/).filter(Boolean);
+    let selectedToken = tokens[0] || candidate;
+    for (const tok of tokens) {
+      if (/^[~^>=<v]*\d/.test(tok)) {
+        selectedToken = tok;
+        break;
+      }
+    }
+
+    // Chỉ loại bỏ tiền tố toán tử (^, ~, >=, <=, >, <, =) và chữ 'v' ở ĐẦU phiên bản (không xóa 'v' trong -dev)
+    let clean = selectedToken
+      .replace(/^(>=|<=|>|<|=|\^|~)+/, '')
+      .replace(/^v(?=\d)/i, '')
+      .trim();
+
+    // Chuẩn hóa x-range như "1.2.x" -> "1.2.0", "1.x" -> "1.0.0"
+    if (/^\d+(\.(\d+|x|X|\*)){0,2}$/.test(clean)) {
+      const parts = clean.split('.');
+      while (parts.length < 3) parts.push('0');
+      clean = parts.map((p) => (/^[xX*]$/.test(p) ? '0' : p)).join('.');
+    }
+
+    return {
+      version: clean || raw,
+      versionRange: raw,
+      isVersionRange: isRange,
+      isSkippable: false
+    };
+  }
+
+  /**
    * Bóc tách chuỗi JSON của package.json
    */
   static parsePackageJsonContent(rawContent) {
@@ -17,12 +72,14 @@ class ParserService {
 
     for (const [name, versionRaw] of Object.entries(allDependencies)) {
       if (typeof versionRaw !== 'string') continue;
-      // Loại bỏ các ký tự phiên bản của npm như ^, ~, >=, <=, =, v
-      const cleanVersion = versionRaw.replace(/[\^~>=<v]/g, '').trim();
+      const parsed = this.parseNpmVersionSpec(versionRaw);
+      if (parsed.isSkippable || !parsed.version) continue;
 
       packages.push({
         name: name,
-        version: cleanVersion,
+        version: parsed.version,
+        versionRange: parsed.versionRange,
+        isVersionRange: parsed.isVersionRange,
         ecosystem: 'npm'
       });
     }
