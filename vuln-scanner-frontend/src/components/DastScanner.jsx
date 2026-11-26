@@ -5,13 +5,14 @@ import {
 } from 'lucide-react';
 import { dastAPI } from '../services/api';
 
-export default function DastScanner() {
+export default function DastScanner({ user, onOpenAuth }) {
   const [targetUrl, setTargetUrl] = useState('');
   const [projectName, setProjectName] = useState('');
   const [zapStatus, setZapStatus] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [scanResult, setScanResult] = useState(null);
+  const [pendingDastScan, setPendingDastScan] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   const scanSteps = [
@@ -28,6 +29,21 @@ export default function DastScanner() {
       .then((res) => setZapStatus(res.data.status))
       .catch(() => setZapStatus({ isAvailable: false }));
   }, []);
+
+  // Tự động mở kết quả DAST sau khi khách đăng nhập thành công
+  useEffect(() => {
+    if (user && pendingDastScan?.scanId) {
+      dastAPI.claimScan(pendingDastScan.scanId)
+        .then((res) => {
+          setScanResult(res.data.data);
+          setPendingDastScan(null);
+        })
+        .catch((err) => {
+          setErrorMessage(err.response?.data?.error || 'Không thể tải kết quả kiểm thử DAST');
+          setPendingDastScan(null);
+        });
+    }
+  }, [user, pendingDastScan]);
 
   const handleDemoLocal = () => {
     setTargetUrl('http://localhost:5000/health');
@@ -64,7 +80,12 @@ export default function DastScanner() {
       });
       clearInterval(stepTimer);
       setIsScanning(false);
-      setScanResult(res.data);
+      if (res.data?.requiresAuth) {
+        setPendingDastScan(res.data);
+      } else {
+        setPendingDastScan(null);
+        setScanResult(res.data);
+      }
     } catch (err) {
       clearInterval(stepTimer);
       setIsScanning(false);
@@ -147,7 +168,34 @@ export default function DastScanner() {
       </div>
 
       {/* Main Scanner Card / Input Box */}
-      {!scanResult ? (
+      {pendingDastScan && !scanResult ? (
+        <div className="glass-card" style={{ padding: '40px 28px', textAlign: 'center' }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: 16, margin: '0 auto 18px',
+            background: 'rgba(59, 130, 246, 0.12)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 26
+          }}>
+            🔒
+          </div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>
+            Kiểm thử DAST hoàn tất — Yêu cầu đăng nhập
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>
+            Đã hoàn tất kiểm thử động cho <strong style={{ color: 'var(--text-main)' }}>{pendingDastScan.targetUrl}</strong>.
+            Vui lòng đăng nhập hoặc đăng ký tài khoản để xem chi tiết các lỗ hổng phát hiện được.
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button type="button" className="btn-primary" onClick={onOpenAuth}>
+              Đăng Nhập / Đăng Ký Để Xem Kết Quả
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => setPendingDastScan(null)}>
+              Kiểm thử URL khác
+            </button>
+          </div>
+        </div>
+      ) : !scanResult ? (
         <div className="glass-card" style={{ padding: 28 }}>
           <form onSubmit={runDastScan}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>

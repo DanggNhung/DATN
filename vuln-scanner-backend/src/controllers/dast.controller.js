@@ -33,6 +33,19 @@ exports.startDastScan = async (req, res) => {
       durationSeconds: scanResult.durationSeconds
     });
 
+    // Khách chưa đăng nhập chỉ được test URL, buộc đăng nhập mới được xem kết quả chi tiết
+    if (!req.user) {
+      return res.json({
+        success: true,
+        requiresAuth: true,
+        scanId: dastRecord._id,
+        scannedAt: dastRecord.createdAt,
+        projectName: dastRecord.projectName,
+        targetUrl: dastRecord.targetUrl,
+        message: 'Đã hoàn tất kiểm thử DAST. Vui lòng đăng nhập để xem kết quả chi tiết.'
+      });
+    }
+
     return res.json({
       success: true,
       scanId: dastRecord._id,
@@ -87,10 +100,14 @@ exports.getDastHistory = async (req, res) => {
 };
 
 /**
- * Lấy chi tiết bài kiểm thử DAST
+ * Lấy chi tiết bài kiểm thử DAST (bắt buộc đăng nhập)
  */
 exports.getDastById = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Vui lòng đăng nhập để xem kết quả kiểm thử DAST' });
+    }
+
     const { id } = req.params;
     const scan = await DastScan.findById(id).populate('userId', 'username email');
 
@@ -98,15 +115,52 @@ exports.getDastById = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Không tìm thấy kết quả kiểm thử DAST' });
     }
 
-    // Kiểm tra quyền truy cập: Chặn khách và người dùng khác khi dữ liệu có chủ sở hữu
+    // Kiểm tra quyền truy cập: Chặn người dùng khác khi dữ liệu có chủ sở hữu
     if (scan.userId) {
       const ownerId = (scan.userId._id || scan.userId).toString();
-      const isOwner = req.user && req.user._id && req.user._id.toString() === ownerId;
-      const isAdmin = req.user && req.user.role === 'admin';
+      const isOwner = req.user._id && req.user._id.toString() === ownerId;
+      const isAdmin = req.user.role === 'admin';
 
       if (!isOwner && !isAdmin) {
         return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
       }
+    }
+
+    return res.json({
+      success: true,
+      data: scan
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Nhận quyền sở hữu bài kiểm thử DAST khách vừa test sau khi đăng nhập
+ */
+exports.claimDastScan = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Vui lòng đăng nhập để xem kết quả kiểm thử DAST' });
+    }
+
+    const { id } = req.params;
+    const scan = await DastScan.findById(id);
+
+    if (!scan) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy kết quả kiểm thử DAST' });
+    }
+
+    if (scan.userId) {
+      const ownerId = scan.userId.toString();
+      const isOwner = req.user._id && req.user._id.toString() === ownerId;
+      const isAdmin = req.user.role === 'admin';
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
+      }
+    } else {
+      scan.userId = req.user._id;
+      await scan.save();
     }
 
     return res.json({

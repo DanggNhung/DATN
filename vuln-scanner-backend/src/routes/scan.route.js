@@ -31,8 +31,11 @@ router.get('/public/stats', scanController.getPublicStats);
 // Lịch sử quét của người dùng
 router.get('/history', verifyAuth, scanController.getScanHistory);
 
-// Chi tiết 1 bài quét theo ID
-router.get('/:id', optionalAuth, scanController.getScanById);
+// Chi tiết 1 bài quét theo ID (bắt buộc đăng nhập)
+router.get('/:id', verifyAuth, scanController.getScanById);
+
+// Nhận quyền sở hữu và xem kết quả bài quét khách vừa test sau khi đăng nhập
+router.post('/:id/claim', verifyAuth, scanController.claimScan);
 
 // Tiếp nhận upload file quét
 router.post('/upload', optionalAuth, upload.single('file'), scanController.scanFile);

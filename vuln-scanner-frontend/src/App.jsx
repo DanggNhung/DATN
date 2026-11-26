@@ -14,6 +14,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('scanner');
   const [user, setUser] = useState(null);
   const [currentScan, setCurrentScan] = useState(null);
+  const [pendingScan, setPendingScan] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [publicStats, setPublicStats] = useState(null);
 
@@ -53,11 +54,31 @@ export default function App() {
   };
 
   const handleScanSuccess = (scanData) => {
-    setCurrentScan(scanData);
+    if (scanData?.requiresAuth) {
+      setPendingScan(scanData);
+      setCurrentScan(null);
+    } else {
+      setPendingScan(null);
+      setCurrentScan(scanData);
+    }
     // Cập nhật lại stats
     scanAPI.getPublicStats()
       .then((res) => setPublicStats(res.data.stats))
       .catch(() => {});
+  };
+
+  const handleAuthSuccess = async (u) => {
+    setUser(u);
+    if (pendingScan?.scanId) {
+      try {
+        const res = await scanAPI.claimScan(pendingScan.scanId);
+        setCurrentScan(res.data.data);
+        setPendingScan(null);
+        setActiveTab('scanner');
+      } catch (err) {
+        alert('Không thể mở kết quả quét: ' + (err.response?.data?.error || err.message));
+      }
+    }
   };
 
   const handleViewScanFromHistory = async (scanId) => {
@@ -94,6 +115,41 @@ export default function App() {
               scanData={currentScan}
               onBack={() => setCurrentScan(null)}
             />
+          ) : pendingScan ? (
+            <div style={{ maxWidth: 640, margin: '60px auto', padding: '0 20px' }}>
+              <div className="glass-card" style={{ padding: '40px 28px', textAlign: 'center' }}>
+                <div style={{
+                  width: 60, height: 60, borderRadius: 16, margin: '0 auto 18px',
+                  background: 'linear-gradient(135deg, rgba(244,63,94,0.12), rgba(219,39,119,0.12))',
+                  border: '1px solid rgba(219,39,119,0.25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 26
+                }}>
+                  🔒
+                </div>
+                <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>
+                  Phân tích hoàn tất — Yêu cầu đăng nhập
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>
+                  Hệ thống đã quét xong tệp <strong style={{ color: 'var(--text-main)' }}>{pendingScan.fileName}</strong> cho dự án <strong style={{ color: 'var(--text-main)' }}>{pendingScan.projectName}</strong>.
+                  Để bảo mật thông tin lỗ hổng, vui lòng đăng nhập hoặc đăng ký tài khoản để xem báo cáo chi tiết.
+                </p>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn-primary"
+                    onClick={() => setAuthModalOpen(true)}
+                  >
+                    Đăng Nhập / Đăng Ký Để Xem Kết Quả
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setPendingScan(null)}
+                  >
+                    Quét tệp khác
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
             <Scanner
               onScanSuccess={handleScanSuccess}
@@ -103,7 +159,7 @@ export default function App() {
         )}
 
         {activeTab === 'dast' && (
-          <DastScanner />
+          <DastScanner user={user} onOpenAuth={() => setAuthModalOpen(true)} />
         )}
 
         {activeTab === 'exploitdb' && (
@@ -155,7 +211,7 @@ export default function App() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onAuthSuccess={(u) => setUser(u)}
+        onAuthSuccess={handleAuthSuccess}
       />
     </div>
   );

@@ -48,6 +48,7 @@ export const scanAPI = {
   scanRaw: (data) => api.post('/scan/raw', data),
   getHistory: (page = 1, limit = 10) => api.get(`/scan/history?page=${page}&limit=${limit}`),
   getScanById: (id) => api.get(`/scan/${id}`),
+  claimScan: (id) => api.post(`/scan/${id}/claim`),
   getPublicStats: () => api.get('/scan/public/stats')
 };
 
@@ -64,6 +65,7 @@ export const dastAPI = {
   scan: (data) => api.post('/dast/scan', data),
   getHistory: (page = 1, limit = 10) => api.get(`/dast/history?page=${page}&limit=${limit}`),
   getById: (id) => api.get(`/dast/${id}`),
+  claimScan: (id) => api.post(`/dast/${id}/claim`),
   getZapStatus: () => api.get('/dast/zap-status')
 };
 

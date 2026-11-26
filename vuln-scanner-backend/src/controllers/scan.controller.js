@@ -114,6 +114,20 @@ exports.scanFile = async (req, res) => {
       status: scanStatus
     });
 
+    // Khách chưa đăng nhập chỉ được test, buộc đăng nhập mới được trả kết quả chi tiết
+    if (!req.user) {
+      return res.json({
+        success: true,
+        requiresAuth: true,
+        scanId: scanRecord._id,
+        scannedAt: scanRecord.createdAt,
+        projectName: scanRecord.projectName,
+        fileName: scanRecord.fileName,
+        fileType: scanRecord.fileType,
+        message: 'Đã hoàn tất phân tích. Vui lòng đăng nhập để xem kết quả chi tiết.'
+      });
+    }
+
     return res.json({
       success: true,
       scanId: scanRecord._id,
@@ -206,6 +220,20 @@ exports.scanRaw = async (req, res) => {
       status: scanStatus
     });
 
+    // Khách chưa đăng nhập chỉ được test, buộc đăng nhập mới được trả kết quả chi tiết
+    if (!req.user) {
+      return res.json({
+        success: true,
+        requiresAuth: true,
+        scanId: scanRecord._id,
+        scannedAt: scanRecord.createdAt,
+        projectName: scanRecord.projectName,
+        fileName: scanRecord.fileName,
+        fileType: scanRecord.fileType,
+        message: 'Đã hoàn tất phân tích. Vui lòng đăng nhập để xem kết quả chi tiết.'
+      });
+    }
+
     return res.json({
       success: true,
       scanId: scanRecord._id,
@@ -269,10 +297,14 @@ exports.getScanHistory = async (req, res) => {
 };
 
 /**
- * Lấy chi tiết một bài quét theo ID
+ * Lấy chi tiết một bài quét theo ID (bắt buộc đăng nhập)
  */
 exports.getScanById = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Vui lòng đăng nhập để xem kết quả quét' });
+    }
+
     const { id } = req.params;
     const scan = await Scan.findById(id).populate('userId', 'username email').lean();
 
@@ -280,11 +312,11 @@ exports.getScanById = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Không tìm thấy kết quả quét' });
     }
 
-    // Kiểm tra quyền truy cập (AUD: Quyền đọc chi tiết scan SCA phải chặn khách khi dữ liệu có chủ sở hữu)
+    // Kiểm tra quyền truy cập: chỉ chủ sở hữu hoặc admin mới được xem
     if (scan.userId) {
       const ownerId = (scan.userId._id || scan.userId).toString();
-      const isOwner = req.user && req.user._id && req.user._id.toString() === ownerId;
-      const isAdmin = req.user && req.user.role === 'admin';
+      const isOwner = req.user._id && req.user._id.toString() === ownerId;
+      const isAdmin = req.user.role === 'admin';
 
       if (!isOwner && !isAdmin) {
         return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
@@ -297,6 +329,47 @@ exports.getScanById = async (req, res) => {
     return res.json({
       success: true,
       data: scan
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Nhận quyền sở hữu bài quét khách vừa test sau khi đăng nhập và trả về kết quả
+ */
+exports.claimScan = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Vui lòng đăng nhập để xem kết quả quét' });
+    }
+
+    const { id } = req.params;
+    const scan = await Scan.findById(id);
+
+    if (!scan) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy kết quả quét' });
+    }
+
+    if (scan.userId) {
+      const ownerId = scan.userId.toString();
+      const isOwner = req.user._id && req.user._id.toString() === ownerId;
+      const isAdmin = req.user.role === 'admin';
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ success: false, error: 'Bạn không có quyền xem kết quả này' });
+      }
+    } else {
+      scan.userId = req.user._id;
+      await scan.save();
+    }
+
+    const scanObj = scan.toObject();
+    scanObj.projectName = decodeUtf8Safe(scanObj.projectName);
+    scanObj.fileName = decodeUtf8Safe(scanObj.fileName);
+
+    return res.json({
+      success: true,
+      data: scanObj
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
